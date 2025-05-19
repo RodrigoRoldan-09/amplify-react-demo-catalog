@@ -6,10 +6,20 @@ const client = generateClient<Schema>();
 
 function App() {
   const [todos, setTodos] = useState<Array<Schema["Todo"]["type"]>>([]);
-
+  const [editingId, setEditingId] = useState<string | null>(null);
     
   function deleteTodo(id: string) {
-    client.models.Todo.delete({ id })
+    client.models.Todo.delete({ id });
+  }
+  
+  function editTodo(id: string, currentContent: string) {
+    const newContent = window.prompt("Edit todo content", currentContent);
+    if (newContent !== null && newContent !== currentContent) {
+      client.models.Todo.update({
+        id,
+        content: newContent
+      });
+    }
   }
 
   useEffect(() => {
@@ -28,13 +38,17 @@ function App() {
       <button onClick={createTodo}>+ new</button>
       <ul>
         {todos.map((todo) => (
-          <li
-          onClick={() => deleteTodo(todo.id)}
-          key={todo.id}>{todo.content}</li>
+          <li key={todo.id}>
+            <span>{todo.content}</span>
+            <div>
+              <button onClick={() => editTodo(todo.id, todo.content)}>Edit</button>
+              <button onClick={() => deleteTodo(todo.id)}>Delete</button>
+            </div>
+          </li>
         ))}
       </ul>
       <div>
-        🥳 App successfully hosted. Try creating a new todo.
+        🥳 App successfully hosted. Try creating, editing, or deleting a todo.
         <br />
         <a href="https://docs.amplify.aws/react/start/quickstart/#make-frontend-updates">
           Review next step of this tutorial.
