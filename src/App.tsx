@@ -6,7 +6,8 @@ const client = generateClient<Schema>();
 
 function App() {
   const [todos, setTodos] = useState<Array<Schema["Todo"]["type"]>>([]);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // Remove the unused state variable since we're not using it
+  // const [editingId, setEditingId] = useState<string | null>(null);
     
   function deleteTodo(id: string) {
     client.models.Todo.delete({ id });
@@ -41,8 +42,9 @@ function App() {
           <li key={todo.id}>
             <span>{todo.content}</span>
             <div>
-              <button onClick={() => editTodo(todo.id, todo.content)}>Edit</button>
-              <button onClick={() => deleteTodo(todo.id)}>Delete</button>
+              {/* Add a null check for todo.id to handle potential undefined values */}
+              <button onClick={() => todo.id && editTodo(todo.id, todo.content || "")}>Edit</button>
+              <button onClick={() => todo.id && deleteTodo(todo.id)}>Delete</button>
             </div>
           </li>
         ))}
