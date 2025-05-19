@@ -1,11 +1,38 @@
 import { useEffect, useState } from "react";
 import type { Schema } from "../amplify/data/resource";
 import { generateClient } from "aws-amplify/data";
+import { GraphQLFormattedError } from 'graphql';
 
 const client = generateClient<Schema>();
 
-// Define the Demo type based on your schema
-type DemoType = Schema["Demo"]["type"];
+// Define proper types for GraphQL responses
+type GraphQLNullable<T> = T | null;
+
+// Base type for Demo items - match the schema's structure
+interface DemoItem {
+  id: string;
+  projectName?: GraphQLNullable<string>;
+  githubLink?: GraphQLNullable<string>;
+  projectLink?: GraphQLNullable<string>;
+  imageUrl?: GraphQLNullable<string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Type for Todo items (fallback model)
+interface TodoItem {
+  id: string;
+  content?: GraphQLNullable<string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Response type from GraphQL operations
+interface GraphQLResponse<T> {
+  data: T | null;
+  errors?: GraphQLFormattedError[];
+  extensions?: Record<string, unknown>;
+}
 
 // Define a type for errors
 type AppError = Error | { message: string };
@@ -14,9 +41,10 @@ function App() {
   // Debug state to see what's happening
   const [debugInfo, setDebugInfo] = useState<string>("Initializing...");
   const [isLoading, setIsLoading] = useState(true);
+  const [modelExists, setModelExists] = useState(false);
   
-  // Properly typed state for demos
-  const [demos, setDemos] = useState<DemoType[]>([]);
+  // State for demos with proper typing
+  const [demos, setDemos] = useState<DemoItem[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
@@ -35,32 +63,152 @@ function App() {
     imageUrl: false
   });
 
-  // Debug function to test the database
-// Update the testDatabase function with the correct return type
-function testDatabase() {
-  setDebugInfo("Testing database models...");
-  
-  // Check what models are available
-  setDebugInfo(prev => prev + "\nAvailable models: " + Object.keys(client.models).join(", "));
-  
-  // Try to create a test item
-  try {
-    client.models.Demo.create({
-      projectName: "Test Project",
-      githubLink: "https://github.com/test/project",
-      projectLink: "https://test-project.example.com",
-      imageUrl: "https://via.placeholder.com/400x200?text=Test+Project"
-    }).then((response) => {
-      // The response contains a data property with the created item
-      setDebugInfo(prev => prev + "\nDemo created successfully: " + JSON.stringify(response.data));
-    }).catch((error: AppError) => {
-      setDebugInfo(prev => prev + "\nFailed to create Demo: " + error.message);
-    });
-  } catch (error) {
-    const typedError = error as AppError;
-    setDebugInfo(prev => prev + "\nError testing database: " + typedError.message);
+  // Check which models are available and set up subscriptions
+  useEffect(() => {
+    setDebugInfo("Checking available models...");
+    const availableModels = Object.keys(client.models);
+    setDebugInfo(prev => prev + "\nAvailable models: " + availableModels.join(", "));
+    
+    // See if Demo model exists
+    if (availableModels.includes("Demo")) {
+      setDebugInfo(prev => prev + "\nDemo model exists!");
+      setModelExists(true);
+      
+      // Set up subscription to Demo model
+      try {
+        const subscription = client.models.Demo.observeQuery().subscribe({
+          next: (data) => {
+            setDebugInfo(prev => prev + "\nDemo data received: " + data.items.length + " items");
+            // Ensure items match our DemoItem type
+            const typedItems: DemoItem[] = data.items.map(item => ({
+              id: item.id,
+              projectName: item.projectName,
+              githubLink: item.githubLink,
+              projectLink: item.projectLink,
+              imageUrl: item.imageUrl,
+              createdAt: item.createdAt,
+              updatedAt: item.updatedAt
+            }));
+            setDemos(typedItems);
+            setIsLoading(false);
+          },
+          error: (err) => {
+            const typedError = err as AppError;
+            setDebugInfo(prev => prev + "\nError in Demo subscription: " + typedError.message);
+            setIsLoading(false);
+          }
+        });
+        
+        return () => subscription.unsubscribe();
+      } catch (error) {
+        const typedError = error as AppError;
+        setDebugInfo(prev => prev + "\nError setting up Demo subscription: " + typedError.message);
+        setIsLoading(false);
+      }
+    } 
+    // Check if Todo model exists (fallback)
+    else if (availableModels.includes("Todo")) {
+      setDebugInfo(prev => prev + "\nTodo model exists, but Demo model does not exist yet.");
+      setModelExists(false);
+      
+      // Set up subscription to Todo model as fallback
+      try {
+        // Using type assertion with specific type
+        type TodoModels = typeof client.models & { 
+          Todo: { 
+            observeQuery: () => { 
+              subscribe: (options: { 
+                next: (data: { items: TodoItem[] }) => void, 
+                error: (err: Error) => void 
+              }) => { 
+                unsubscribe: () => void 
+              } 
+            } 
+          } 
+        };
+        const todoModels = client.models as TodoModels;
+        
+        const subscription = todoModels.Todo.observeQuery().subscribe({
+          next: (data) => {
+            setDebugInfo(prev => prev + "\nTodo data received: " + data.items.length + " items");
+            // We won't convert Todo items to Demo format here
+            setDemos([]);
+            setIsLoading(false);
+          },
+          error: (err) => {
+            const typedError = err as AppError;
+            setDebugInfo(prev => prev + "\nError in Todo subscription: " + typedError.message);
+            setIsLoading(false);
+          }
+        });
+        
+        return () => subscription.unsubscribe();
+      } catch (error) {
+        const typedError = error as AppError;
+        setDebugInfo(prev => prev + "\nError setting up Todo subscription: " + typedError.message);
+        setIsLoading(false);
+      }
+    }
+    else {
+      setDebugInfo(prev => prev + "\nNo valid models found!");
+      setModelExists(false);
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Test database function
+  function testDatabase() {
+    setDebugInfo("Testing database...");
+    const availableModels = Object.keys(client.models);
+    setDebugInfo(prev => prev + "\nAvailable models: " + availableModels.join(", "));
+    
+    if (availableModels.includes("Demo")) {
+      // Test creating a Demo
+      try {
+        client.models.Demo.create({
+          projectName: "Test Project",
+          githubLink: "https://github.com/test/project",
+          projectLink: "https://test-project.example.com",
+          imageUrl: "https://via.placeholder.com/400x200?text=Test+Project"
+        }).then(() => {
+          // Removed unused parameter
+          setDebugInfo(prev => prev + "\nDemo created successfully!");
+        }).catch((err) => {
+          const typedError = err as AppError;
+          setDebugInfo(prev => prev + "\nFailed to create Demo: " + typedError.message);
+        });
+      } catch (error) {
+        const typedError = error as AppError;
+        setDebugInfo(prev => prev + "\nError testing database: " + typedError.message);
+      }
+    } else if (availableModels.includes("Todo")) {
+      // Test creating a Todo as fallback
+      try {
+        // Using type assertion with specific type
+        type TodoModels = typeof client.models & { 
+          Todo: { 
+            create: (item: { content: string }) => Promise<GraphQLResponse<TodoItem>> 
+          } 
+        };
+        const todoModels = client.models as TodoModels;
+        
+        todoModels.Todo.create({
+          content: "Test Todo"
+        }).then(() => {
+          // Removed unused parameter
+          setDebugInfo(prev => prev + "\nTodo created successfully! Demo model not available yet.");
+        }).catch((err) => {
+          const typedError = err as AppError;
+          setDebugInfo(prev => prev + "\nFailed to create Todo: " + typedError.message);
+        });
+      } catch (error) {
+        const typedError = error as AppError;
+        setDebugInfo(prev => prev + "\nError testing database: " + typedError.message);
+      }
+    } else {
+      setDebugInfo(prev => prev + "\nNo valid models found to test!");
+    }
   }
-}
 
   function validateForm() {
     const errors = {
@@ -75,6 +223,11 @@ function testDatabase() {
   }
   
   function deleteDemo(id: string) {
+    if (!modelExists) {
+      setDebugInfo("Cannot delete: Demo model is not available in the backend yet.");
+      return;
+    }
+    
     if (window.confirm("Are you sure you want to delete this demo?")) {
       try {
         client.models.Demo.delete({ id });
@@ -85,7 +238,7 @@ function testDatabase() {
     }
   }
   
-  function openEditForm(demo: DemoType) {
+  function openEditForm(demo: DemoItem) {
     if (!demo) return;
     
     setFormData({
@@ -121,6 +274,11 @@ function testDatabase() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     
+    if (!modelExists) {
+      setDebugInfo("Cannot submit: Demo model is not available in the backend yet.");
+      return;
+    }
+    
     if (!validateForm()) {
       return;
     }
@@ -152,40 +310,7 @@ function testDatabase() {
     }
   }
 
-  useEffect(() => {
-    setIsLoading(true);
-    setDebugInfo("Setting up subscriptions...");
-    
-    // Subscription with proper typing
-    let subscription: { unsubscribe: () => void } | null = null;
-    
-    try {
-      setDebugInfo(prev => prev + "\nUsing Demo model");
-      subscription = client.models.Demo.observeQuery().subscribe({
-        next: (data) => {
-          setDebugInfo(prev => prev + "\nDemo data received: " + data.items.length + " items");
-          setDemos([...data.items]);
-          setIsLoading(false);
-        },
-        error: (error: AppError) => {
-          setDebugInfo(prev => prev + "\nError in Demo subscription: " + error.message);
-          setIsLoading(false);
-        }
-      });
-    } catch (error) {
-      const typedError = error as AppError;
-      setDebugInfo(prev => prev + "\nError setting up subscription: " + typedError.message);
-      setIsLoading(false);
-    }
-    
-    // Cleanup subscription on component unmount
-    return () => {
-      if (subscription) {
-        subscription.unsubscribe();
-      }
-    };
-  }, []);
-
+  // UI part remains the same
   return (
     <main>
       <h1>My AWS Project Demos</h1>
@@ -204,12 +329,34 @@ function testDatabase() {
         <div style={{ marginTop: '10px' }}>{debugInfo}</div>
       </div>
       
+      {!modelExists && (
+        <div style={{ 
+          border: '1px solid #f03e3e', 
+          padding: '16px', 
+          backgroundColor: '#fff5f5', 
+          color: '#e03131',
+          borderRadius: '8px',
+          marginBottom: '20px'
+        }}>
+          <strong>Backend Configuration Issue:</strong> The Demo model does not exist in your backend yet. 
+          <p>Your backend needs to be updated to include the Demo model. Please check the AWS Amplify Console to see if your deployment is complete.</p>
+          <p>If the deployment has completed but the Demo model still isn't available, try:</p>
+          <ol style={{ marginLeft: '20px' }}>
+            <li>Verify that your amplify/data/resources.ts file has the correct schema</li>
+            <li>Commit and push changes to trigger a new deployment</li>
+            <li>Check the AWS Amplify Console for any deployment errors</li>
+          </ol>
+        </div>
+      )}
+      
       {isLoading ? (
         <div>Loading data...</div>
       ) : (
         <>
           {!isFormOpen ? (
-            <button onClick={() => setIsFormOpen(true)}>+ Add New Demo</button>
+            <button onClick={() => setIsFormOpen(true)} disabled={!modelExists}>
+              + Add New Demo
+            </button>
           ) : (
             <div style={{ border: '1px solid #ccc', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
               <h2>{editingId ? 'Edit Demo' : 'Add New Demo'}</h2>
@@ -291,7 +438,7 @@ function testDatabase() {
                 </div>
                 
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button type="submit">
+                  <button type="submit" disabled={!modelExists}>
                     {editingId ? 'Update Demo' : 'Add Demo'}
                   </button>
                   <button 
@@ -377,12 +524,14 @@ function testDatabase() {
                   <button 
                     onClick={() => demo.id && openEditForm(demo)}
                     style={{ backgroundColor: '#f59e0b' }}
+                    disabled={!modelExists}
                   >
                     Edit
                   </button>
                   <button 
                     onClick={() => demo.id && deleteDemo(demo.id)}
                     style={{ backgroundColor: '#ef4444' }}
+                    disabled={!modelExists}
                   >
                     Delete
                   </button>
