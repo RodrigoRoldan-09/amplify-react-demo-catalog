@@ -1,15 +1,20 @@
 import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
 
-/*== STEP 1 ===============================================================
-The section below creates a Todo database table with a "content" field. Try
-adding a new "isDone" field as a boolean. The authorization rule below
-specifies that any user authenticated via an API key can "create", "read",
-"update", and "delete" any "Todo" records.
-=========================================================================*/
+/*
+  This schema creates a Demo model to showcase your AWS projects.
+  Each demo requires the following fields:
+  - projectName: The name of your project
+  - githubLink: Link to the project's GitHub repository  
+  - projectLink: Link to the deployed project
+  - imageUrl: URL for the project's screenshot or preview image
+*/
 const schema = a.schema({
-  Todo: a
+  Demo: a
     .model({
-      content: a.string(),
+      projectName: a.string(),
+      githubLink: a.string(),
+      projectLink: a.string(),
+      imageUrl: a.string(),
     })
     .authorization((allow) => [allow.publicApiKey()]),
 });
