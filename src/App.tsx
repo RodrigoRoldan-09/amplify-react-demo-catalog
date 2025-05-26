@@ -52,6 +52,10 @@ function App() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
+  // Filter state
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
+  
   // Form state
   const [formData, setFormData] = useState({
     projectName: "",
@@ -405,6 +409,43 @@ function App() {
       .map(dt => dt.tag!.name);
   }
 
+  // Filter demos based on search term and selected filter tags
+  function getFilteredDemos(): DemoItem[] {
+    return demos.filter(demo => {
+      // Filter by search term (project name)
+      const matchesSearch = !searchTerm || 
+        (demo.projectName && demo.projectName.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      // Filter by selected tags
+      const matchesTags = selectedFilterTags.length === 0 || 
+        selectedFilterTags.every(filterTagId => 
+          demoTags.some(dt => dt.demoId === demo.id && dt.tagId === filterTagId)
+        );
+      
+      return matchesSearch && matchesTags;
+    });
+  }
+
+  // Handle filter tag toggle
+  function handleFilterTagToggle(tagId: string) {
+    setSelectedFilterTags(prev => 
+      prev.includes(tagId) 
+        ? prev.filter(id => id !== tagId)
+        : [...prev, tagId]
+    );
+  }
+
+  // Clear all filters
+  function clearAllFilters() {
+    setSearchTerm("");
+    setSelectedFilterTags([]);
+  }
+
+  // Handle search input change
+  function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setSearchTerm(e.target.value);
+  }
+
   // UI part - Updated to match the dark theme
   return (
     <div style={{ 
@@ -420,7 +461,24 @@ function App() {
           alignItems: 'center',
           marginBottom: '20px'
         }}>
-          <h1 style={{ color: '#f89520', margin: 0 }}>OrangeSlice</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <h1 style={{ color: '#f89520', margin: 0 }}>OrangeSlice</h1>
+            
+            <button 
+              onClick={clearAllFilters}
+              style={{
+                backgroundColor: '#666',
+                color: 'white',
+                padding: '8px 16px',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              🏠 Home
+            </button>
+          </div>
           
           <button 
             onClick={() => setIsFormOpen(true)} 
@@ -481,6 +539,92 @@ function App() {
           </div>
         ) : (
           <>
+            {/* Filter Section */}
+            {!isFormOpen && (
+              <div style={{ 
+                backgroundColor: '#222', 
+                padding: '20px', 
+                borderRadius: '8px', 
+                marginBottom: '20px',
+                border: '1px solid #333'
+              }}>
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'white' }}>
+                    🔍 Search by Project Name
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={handleSearchChange}
+                      placeholder="Type to search projects..."
+                      style={{ 
+                        width: '100%', 
+                        padding: '10px', 
+                        backgroundColor: '#333',
+                        color: 'white',
+                        border: '1px solid #444',
+                        borderRadius: '4px',
+                        marginTop: '8px'
+                      }}
+                    />
+                  </label>
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'white' }}>
+                    🏷️ Filter by Tags
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {availableTags.map(tag => (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => handleFilterTagToggle(tag.id)}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '20px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          backgroundColor: selectedFilterTags.includes(tag.id) ? '#f89520' : '#444',
+                          color: 'white',
+                          fontSize: '14px',
+                          transition: 'background-color 0.2s'
+                        }}
+                      >
+                        {tag.name}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {/* Filter Status */}
+                  {(searchTerm || selectedFilterTags.length > 0) && (
+                    <div style={{ marginTop: '12px', color: '#ddd', fontSize: '14px' }}>
+                      Active filters: 
+                      {searchTerm && <span style={{ color: '#f89520' }}> Search: "{searchTerm}"</span>}
+                      {selectedFilterTags.length > 0 && (
+                        <span style={{ color: '#f89520' }}>
+                          {searchTerm ? ', ' : ' '}Tags: {selectedFilterTags.length} selected
+                        </span>
+                      )}
+                      <button 
+                        onClick={clearAllFilters}
+                        style={{
+                          backgroundColor: 'transparent',
+                          color: '#f89520',
+                          border: 'none',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          marginLeft: '10px',
+                          fontSize: '14px'
+                        }}
+                      >
+                        Clear all filters
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {isFormOpen && (
               <div style={{ 
                 backgroundColor: '#222', 
@@ -643,7 +787,7 @@ function App() {
               gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
               gap: '20px'
             }}>
-              {demos.map((demo, index) => (
+              {getFilteredDemos().map((demo, index) => (
                 <div key={demo.id} style={{ 
                   backgroundColor: '#222',
                   borderRadius: '8px',
@@ -767,7 +911,7 @@ function App() {
               ))}
             </div>
             
-            {demos.length === 0 && !isFormOpen && (
+            {getFilteredDemos().length === 0 && !isFormOpen && (
               <div style={{ 
                 textAlign: 'center', 
                 padding: '40px', 
@@ -776,20 +920,48 @@ function App() {
                 borderRadius: '8px',
                 border: '1px solid #333'
               }}>
-                <p style={{ marginBottom: '20px' }}>No demos added yet. Create your first demo to showcase your AWS projects!</p>
-                <button 
-                  onClick={() => setIsFormOpen(true)}
-                  style={{ 
-                    backgroundColor: '#f89520',
-                    color: 'white',
-                    padding: '10px 16px',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Add Your First Demo
-                </button>
+                {demos.length === 0 ? (
+                  <>
+                    <p style={{ marginBottom: '20px' }}>No demos added yet. Create your first demo to showcase your AWS projects!</p>
+                    <button 
+                      onClick={() => setIsFormOpen(true)}
+                      style={{ 
+                        backgroundColor: '#f89520',
+                        color: 'white',
+                        padding: '10px 16px',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Add Your First Demo
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ marginBottom: '20px' }}>
+                      No projects match your current filters.
+                    </p>
+                    <p style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px' }}>
+                      {searchTerm && `Search: "${searchTerm}"`}
+                      {searchTerm && selectedFilterTags.length > 0 && ' • '}
+                      {selectedFilterTags.length > 0 && `${selectedFilterTags.length} tag filter(s) active`}
+                    </p>
+                    <button 
+                      onClick={clearAllFilters}
+                      style={{ 
+                        backgroundColor: '#f89520',
+                        color: 'white',
+                        padding: '10px 16px',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Clear All Filters
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </>
