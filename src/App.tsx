@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Schema } from "../amplify/data/resource";
 import { generateClient } from "aws-amplify/data";
-import { GraphQLFormattedError } from 'graphql';
+//import { GraphQLFormattedError } from 'graphql';
 
 const client = generateClient<Schema>();
 
@@ -17,22 +17,24 @@ interface DemoItem {
   imageUrl?: GraphQLNullable<string>;
   createdAt: string;
   updatedAt: string;
+  // Tags will be loaded separately due to GraphQL structure
 }
 
-// Type for Todo items (fallback model)
-interface TodoItem {
+// Tag type
+interface TagItem {
   id: string;
-  content?: GraphQLNullable<string>;
-  createdAt: string;
-  updatedAt: string;
+  name: string;
 }
 
-// Response type from GraphQL operations
-interface GraphQLResponse<T> {
-  data: T | null;
-  errors?: GraphQLFormattedError[];
-  extensions?: Record<string, unknown>;
+// DemoTag relationship type
+interface DemoTagItem {
+  id: string;
+  demoId: string;
+  tagId: string;
+  tag?: TagItem;
 }
+
+// Removed unused GraphQL response interface
 
 // Define a type for errors
 type AppError = Error | { message: string };
@@ -43,8 +45,10 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [modelExists, setModelExists] = useState(false);
   
-  // State for demos with proper typing
+  // State for demos and tags
   const [demos, setDemos] = useState<DemoItem[]>([]);
+  const [demoTags, setDemoTags] = useState<DemoTagItem[]>([]);
+  const [availableTags, setAvailableTags] = useState<TagItem[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
@@ -56,12 +60,45 @@ function App() {
     imageUrl: ""
   });
   
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  
   const [formErrors, setFormErrors] = useState({
     projectName: false,
     githubLink: false,
     projectLink: false,
-    imageUrl: false
+    imageUrl: false,
+    tags: false
   });
+
+  // Initialize predefined tags
+  const initializeTags = async () => {
+    const predefinedTags = ["Games", "ML", "Analytics", "M&E", "Generative AI"];
+    
+    try {
+      // Check if tags already exist
+      const existingTags = await client.models.Tag.list();
+      
+      if (existingTags.data && existingTags.data.length === 0) {
+        // Create predefined tags if they don't exist
+        for (const tagName of predefinedTags) {
+          await client.models.Tag.create({ name: tagName });
+        }
+        setDebugInfo(prev => prev + "\nPredefined tags created");
+      }
+      
+      // Fetch all tags
+      const allTagsResponse = await client.models.Tag.list();
+      if (allTagsResponse.data) {
+        setAvailableTags(allTagsResponse.data.map(tag => ({
+          id: tag.id,
+          name: tag.name || ""
+        })));
+      }
+    } catch (error) {
+      const typedError = error as AppError;
+      setDebugInfo(prev => prev + "\nError initializing tags: " + typedError.message);
+    }
+  };
 
   // Check which models are available and set up subscriptions
   useEffect(() => {
@@ -70,16 +107,19 @@ function App() {
     setDebugInfo(prev => prev + "\nAvailable models: " + availableModels.join(", "));
     
     // See if Demo model exists
-    if (availableModels.includes("Demo")) {
-      setDebugInfo(prev => prev + "\nDemo model exists!");
+    if (availableModels.includes("Demo") && availableModels.includes("Tag")) {
+      setDebugInfo(prev => prev + "\nDemo and Tag models exist!");
       setModelExists(true);
+      
+      // Initialize tags first
+      initializeTags();
       
       // Set up subscription to Demo model
       try {
-        const subscription = client.models.Demo.observeQuery().subscribe({
+        const demoSubscription = client.models.Demo.observeQuery().subscribe({
           next: (data) => {
             setDebugInfo(prev => prev + "\nDemo data received: " + data.items.length + " items");
-            // Ensure items match our DemoItem type
+            // Convert items to match our DemoItem type
             const typedItems: DemoItem[] = data.items.map(item => ({
               id: item.id,
               projectName: item.projectName,
@@ -98,59 +138,51 @@ function App() {
             setIsLoading(false);
           }
         });
+
+        // Set up subscription to DemoTag relationships
+        const demoTagSubscription = client.models.DemoTag.observeQuery().subscribe({
+          next: async (data) => {
+            setDebugInfo(prev => prev + "\nDemoTag data received: " + data.items.length + " relationships");
+            
+            // Fetch tag details for each relationship
+            const enrichedDemoTags: DemoTagItem[] = [];
+            for (const item of data.items) {
+              try {
+                const tagResponse = await client.models.Tag.get({ id: item.tagId });
+                if (tagResponse.data) {
+                  enrichedDemoTags.push({
+                    id: item.id,
+                    demoId: item.demoId,
+                    tagId: item.tagId,
+                    tag: {
+                      id: tagResponse.data.id,
+                      name: tagResponse.data.name || ""
+                    }
+                  });
+                }
+              } catch (error) {
+                console.error("Error fetching tag:", error);
+              }
+            }
+            setDemoTags(enrichedDemoTags);
+          },
+          error: (err) => {
+            const typedError = err as AppError;
+            setDebugInfo(prev => prev + "\nError in DemoTag subscription: " + typedError.message);
+          }
+        });
         
-        return () => subscription.unsubscribe();
+        return () => {
+          demoSubscription.unsubscribe();
+          demoTagSubscription.unsubscribe();
+        };
       } catch (error) {
         const typedError = error as AppError;
         setDebugInfo(prev => prev + "\nError setting up Demo subscription: " + typedError.message);
         setIsLoading(false);
       }
-    } 
-    // Check if Todo model exists (fallback)
-    else if (availableModels.includes("Todo")) {
-      setDebugInfo(prev => prev + "\nTodo model exists, but Demo model does not exist yet.");
-      setModelExists(false);
-      
-      // Set up subscription to Todo model as fallback
-      try {
-        // Using type assertion with specific type
-        type TodoModels = typeof client.models & { 
-          Todo: { 
-            observeQuery: () => { 
-              subscribe: (options: { 
-                next: (data: { items: TodoItem[] }) => void, 
-                error: (err: Error) => void 
-              }) => { 
-                unsubscribe: () => void 
-              } 
-            } 
-          } 
-        };
-        const todoModels = client.models as TodoModels;
-        
-        const subscription = todoModels.Todo.observeQuery().subscribe({
-          next: (data) => {
-            setDebugInfo(prev => prev + "\nTodo data received: " + data.items.length + " items");
-            // We won't convert Todo items to Demo format here
-            setDemos([]);
-            setIsLoading(false);
-          },
-          error: (err) => {
-            const typedError = err as AppError;
-            setDebugInfo(prev => prev + "\nError in Todo subscription: " + typedError.message);
-            setIsLoading(false);
-          }
-        });
-        
-        return () => subscription.unsubscribe();
-      } catch (error) {
-        const typedError = error as AppError;
-        setDebugInfo(prev => prev + "\nError setting up Todo subscription: " + typedError.message);
-        setIsLoading(false);
-      }
-    }
-    else {
-      setDebugInfo(prev => prev + "\nNo valid models found!");
+    } else {
+      setDebugInfo(prev => prev + "\nDemo or Tag models don't exist yet!");
       setModelExists(false);
       setIsLoading(false);
     }
@@ -171,7 +203,6 @@ function App() {
           projectLink: "https://test-project.example.com",
           imageUrl: "https://via.placeholder.com/400x200?text=Test+Project"
         }).then(() => {
-          // Removed unused parameter
           setDebugInfo(prev => prev + "\nDemo created successfully!");
         }).catch((err) => {
           const typedError = err as AppError;
@@ -181,32 +212,8 @@ function App() {
         const typedError = error as AppError;
         setDebugInfo(prev => prev + "\nError testing database: " + typedError.message);
       }
-    } else if (availableModels.includes("Todo")) {
-      // Test creating a Todo as fallback
-      try {
-        // Using type assertion with specific type
-        type TodoModels = typeof client.models & { 
-          Todo: { 
-            create: (item: { content: string }) => Promise<GraphQLResponse<TodoItem>> 
-          } 
-        };
-        const todoModels = client.models as TodoModels;
-        
-        todoModels.Todo.create({
-          content: "Test Todo"
-        }).then(() => {
-          // Removed unused parameter
-          setDebugInfo(prev => prev + "\nTodo created successfully! Demo model not available yet.");
-        }).catch((err) => {
-          const typedError = err as AppError;
-          setDebugInfo(prev => prev + "\nFailed to create Todo: " + typedError.message);
-        });
-      } catch (error) {
-        const typedError = error as AppError;
-        setDebugInfo(prev => prev + "\nError testing database: " + typedError.message);
-      }
     } else {
-      setDebugInfo(prev => prev + "\nNo valid models found to test!");
+      setDebugInfo(prev => prev + "\nNo Demo model found to test!");
     }
   }
 
@@ -215,14 +222,15 @@ function App() {
       projectName: formData.projectName.trim() === "",
       githubLink: formData.githubLink.trim() === "",
       projectLink: formData.projectLink.trim() === "",
-      imageUrl: formData.imageUrl.trim() === ""
+      imageUrl: formData.imageUrl.trim() === "",
+      tags: selectedTags.length === 0
     };
     
     setFormErrors(errors);
     return !Object.values(errors).some(error => error);
   }
   
-  function deleteDemo(id: string) {
+  async function deleteDemo(id: string) {
     if (!modelExists) {
       setDebugInfo("Cannot delete: Demo model is not available in the backend yet.");
       return;
@@ -230,7 +238,19 @@ function App() {
     
     if (window.confirm("Are you sure you want to delete this demo?")) {
       try {
-        client.models.Demo.delete({ id });
+        // First delete associated DemoTag relationships
+        const demoTags = await client.models.DemoTag.list({
+          filter: { demoId: { eq: id } }
+        });
+        
+        if (demoTags.data) {
+          for (const demoTag of demoTags.data) {
+            await client.models.DemoTag.delete({ id: demoTag.id });
+          }
+        }
+        
+        // Then delete the demo
+        await client.models.Demo.delete({ id });
       } catch (error) {
         const typedError = error as AppError;
         setDebugInfo("Error deleting demo: " + typedError.message);
@@ -247,6 +267,12 @@ function App() {
       projectLink: demo.projectLink || "",
       imageUrl: demo.imageUrl || ""
     });
+    
+    // Set selected tags for editing
+    const currentTagIds = demoTags
+      .filter(dt => dt.demoId === demo.id)
+      .map(dt => dt.tagId);
+    setSelectedTags(currentTagIds);
     
     if (demo.id) {
       setEditingId(demo.id);
@@ -271,7 +297,25 @@ function App() {
     }
   }
   
-  function handleSubmit(e: React.FormEvent) {
+  function handleTagToggle(tagId: string) {
+    setSelectedTags(prev => {
+      const newTags = prev.includes(tagId) 
+        ? prev.filter(id => id !== tagId)
+        : [...prev, tagId];
+      
+      // Clear tags error when user selects tags
+      if (newTags.length > 0 && formErrors.tags) {
+        setFormErrors(prevErrors => ({
+          ...prevErrors,
+          tags: false
+        }));
+      }
+      
+      return newTags;
+    });
+  }
+  
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     
     if (!modelExists) {
@@ -284,16 +328,40 @@ function App() {
     }
     
     try {
+      let demoId: string;
+      
       if (editingId) {
         // Update existing demo
-        client.models.Demo.update({
+        await client.models.Demo.update({
           id: editingId,
           ...formData
         });
+        demoId = editingId;
+        
+        // Delete existing tag relationships
+        const existingDemoTags = await client.models.DemoTag.list({
+          filter: { demoId: { eq: editingId } }
+        });
+        
+        if (existingDemoTags.data) {
+          for (const demoTag of existingDemoTags.data) {
+            await client.models.DemoTag.delete({ id: demoTag.id });
+          }
+        }
+        
         setEditingId(null);
       } else {
         // Create new demo
-        client.models.Demo.create(formData);
+        const newDemo = await client.models.Demo.create(formData);
+        demoId = newDemo.data?.id || "";
+      }
+      
+      // Create new tag relationships
+      for (const tagId of selectedTags) {
+        await client.models.DemoTag.create({
+          demoId: demoId,
+          tagId: tagId
+        });
       }
       
       // Reset form
@@ -303,11 +371,38 @@ function App() {
         projectLink: "",
         imageUrl: ""
       });
+      setSelectedTags([]);
       setIsFormOpen(false);
     } catch (error) {
       const typedError = error as AppError;
       setDebugInfo("Error in form submit: " + typedError.message);
     }
+  }
+
+  function resetForm() {
+    setIsFormOpen(false);
+    setEditingId(null);
+    setFormData({
+      projectName: "",
+      githubLink: "",
+      projectLink: "",
+      imageUrl: ""
+    });
+    setSelectedTags([]);
+    setFormErrors({
+      projectName: false,
+      githubLink: false,
+      projectLink: false,
+      imageUrl: false,
+      tags: false
+    });
+  }
+
+  // Get tag names for display
+  function getTagNames(demo: DemoItem): string[] {
+    return demoTags
+      .filter(dt => dt.demoId === demo.id && dt.tag)
+      .map(dt => dt.tag!.name);
   }
 
   // UI part - Updated to match the dark theme
@@ -332,7 +427,10 @@ function App() {
             style={{
               backgroundColor: '#f89520',
               color: 'white',
-              padding: '10px 16px'
+              padding: '10px 16px',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
             }}
           >
             + Add Project
@@ -350,7 +448,16 @@ function App() {
           whiteSpace: 'pre-wrap'
         }}>
           <h3>Debug Info (Remove in production)</h3>
-          <button onClick={testDatabase} style={{ backgroundColor: '#f89520' }}>Test Database</button>
+          <button onClick={testDatabase} style={{ 
+            backgroundColor: '#f89520',
+            color: 'white',
+            padding: '8px 12px',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}>
+            Test Database
+          </button>
           <div style={{ marginTop: '10px' }}>{debugInfo}</div>
         </div>
         
@@ -363,8 +470,8 @@ function App() {
             borderRadius: '8px',
             marginBottom: '20px'
           }}>
-            <strong>Backend Configuration Issue:</strong> The Demo model does not exist in your backend yet. 
-            <p>Your backend needs to be updated to include the Demo model. Please check the AWS Amplify Console to see if your deployment is complete.</p>
+            <strong>Backend Configuration Issue:</strong> The Demo or Tag models do not exist in your backend yet. 
+            <p>Your backend needs to be updated to include both Demo and Tag models. Please check the AWS Amplify Console to see if your deployment is complete.</p>
           </div>
         )}
         
@@ -468,11 +575,44 @@ function App() {
                     </label>
                   </div>
                   
+                  {/* Tags Section */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', color: 'white' }}>
+                      Tags *
+                    </label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {availableTags.map(tag => (
+                        <button
+                          key={tag.id}
+                          type="button"
+                          onClick={() => handleTagToggle(tag.id)}
+                          style={{
+                            padding: '8px 16px',
+                            borderRadius: '20px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            backgroundColor: selectedTags.includes(tag.id) ? '#f89520' : '#444',
+                            color: 'white',
+                            fontSize: '14px'
+                          }}
+                        >
+                          {tag.name}
+                        </button>
+                      ))}
+                    </div>
+                    {formErrors.tags && <span style={{ color: '#f44336', fontSize: '14px' }}>At least one tag is required</span>}
+                  </div>
+                  
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button 
                       type="submit" 
                       style={{
                         backgroundColor: '#4CAF50',
+                        color: 'white',
+                        padding: '10px 16px',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
                         flex: 1
                       }}
                     >
@@ -480,24 +620,14 @@ function App() {
                     </button>
                     <button 
                       type="button"
-                      onClick={() => {
-                        setIsFormOpen(false);
-                        setEditingId(null);
-                        setFormData({
-                          projectName: "",
-                          githubLink: "",
-                          projectLink: "",
-                          imageUrl: ""
-                        });
-                        setFormErrors({
-                          projectName: false,
-                          githubLink: false,
-                          projectLink: false,
-                          imageUrl: false
-                        });
-                      }}
+                      onClick={resetForm}
                       style={{
                         backgroundColor: '#666',
+                        color: 'white',
+                        padding: '10px 16px',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
                         flex: 1
                       }}
                     >
@@ -535,7 +665,7 @@ function App() {
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         target.src = 'https://via.placeholder.com/400x200?text=Image+Not+Found';
-                        target.onerror = null; // Prevent infinite loop
+                        target.onerror = null;
                       }}
                     />
                   </div>
@@ -549,6 +679,26 @@ function App() {
                     }}>
                       Demo {index + 1} - {demo.projectName || "Unnamed Project"}
                     </h3>
+                    
+                    {/* Display Tags */}
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                        {getTagNames(demo).map(tagName => (
+                          <span
+                            key={tagName}
+                            style={{
+                              padding: '4px 8px',
+                              backgroundColor: '#f89520',
+                              color: 'white',
+                              borderRadius: '12px',
+                              fontSize: '12px'
+                            }}
+                          >
+                            {tagName}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                     
                     <div style={{ marginBottom: '16px', flexGrow: 1 }}>
                       {demo.githubLink && (
@@ -587,6 +737,11 @@ function App() {
                         onClick={() => demo.id && openEditForm(demo)}
                         style={{
                           backgroundColor: '#f89520',
+                          color: 'white',
+                          padding: '8px 12px',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
                           flex: 1
                         }}
                       >
@@ -596,6 +751,11 @@ function App() {
                         onClick={() => demo.id && deleteDemo(demo.id)}
                         style={{
                           backgroundColor: '#e53935',
+                          color: 'white',
+                          padding: '8px 12px',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
                           flex: 1
                         }}
                       >
@@ -619,7 +779,14 @@ function App() {
                 <p style={{ marginBottom: '20px' }}>No demos added yet. Create your first demo to showcase your AWS projects!</p>
                 <button 
                   onClick={() => setIsFormOpen(true)}
-                  style={{ backgroundColor: '#f89520' }}
+                  style={{ 
+                    backgroundColor: '#f89520',
+                    color: 'white',
+                    padding: '10px 16px',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
                 >
                   Add Your First Demo
                 </button>

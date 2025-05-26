@@ -1,20 +1,38 @@
 import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
 
-/*
-  This schema creates a Demo model to showcase your AWS projects.
-  Each demo requires the following fields:
-  - projectName: The name of your project
-  - githubLink: Link to the project's GitHub repository  
-  - projectLink: Link to the deployed project
-  - imageUrl: URL for the project's screenshot or preview image
+/* This schema creates a Demo model to showcase your AWS projects with tags.
+Each demo requires the following fields:
+- projectName: The name of your project
+- githubLink: Link to the project's GitHub repository  
+- projectLink: Link to the deployed project
+- imageUrl: URL for the project's screenshot or preview image
+- tags: Many-to-many relationship with predefined tags
 */
+
 const schema = a.schema({
   Demo: a
     .model({
       projectName: a.string(),
-      githubLink: a.string(),
+      githubLink: a.string(), 
       projectLink: a.string(),
       imageUrl: a.string(),
+      tags: a.hasMany('DemoTag', 'demoId')
+    })
+    .authorization((allow) => [allow.publicApiKey()]),
+    
+  Tag: a
+    .model({
+      name: a.string().required(),
+      demos: a.hasMany('DemoTag', 'tagId')
+    })
+    .authorization((allow) => [allow.publicApiKey()]),
+    
+  DemoTag: a
+    .model({
+      demoId: a.id().required(),
+      tagId: a.id().required(), 
+      demo: a.belongsTo('Demo', 'demoId'),
+      tag: a.belongsTo('Tag', 'tagId')
     })
     .authorization((allow) => [allow.publicApiKey()]),
 });
@@ -30,6 +48,17 @@ export const data = defineData({
     },
   },
 });
+
+/*
+After deploying this schema, you'll need to manually add the 5 predefined tags to your database:
+1. Games
+2. ML  
+3. Analytics
+4. M&E
+5. Generative AI
+
+You can do this through the AWS Console or by creating a script to populate initial data.
+*/
 
 /*== STEP 2 ===============================================================
 Go to your frontend source code. From your client-side code, generate a
