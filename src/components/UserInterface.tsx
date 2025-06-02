@@ -84,11 +84,13 @@ function UserInterface() {
       // Fetch all tags
       const allTagsResponse = await client.models.Tag.list({});
       if (allTagsResponse.data) {
-        setAvailableTags(allTagsResponse.data.map(tag => ({
+        const tagData = allTagsResponse.data.map(tag => ({
           id: tag.id,
           name: tag.name || "",
           color: tag.color || "#f89520"
-        })));
+        }));
+        setAvailableTags(tagData);
+        console.log("Tags loaded in user interface:", tagData);
       }
     } catch (error) {
       const typedError = error as AppError;
@@ -98,10 +100,14 @@ function UserInterface() {
 
   // Check which models are available and set up subscriptions
   useEffect(() => {
+    console.log("UserInterface: Starting initialization...");
     const availableModels = Object.keys(client.models);
+    console.log("Available models:", availableModels);
     
     // See if Demo model exists
     if (availableModels.includes("Demo") && availableModels.includes("Tag")) {
+      console.log("Both Demo and Tag models exist, setting up subscriptions...");
+      
       // Load tags first
       loadTags();
       
@@ -132,11 +138,13 @@ function UserInterface() {
         // Set up subscription to Tag model
         const tagSubscription = client.models.Tag.observeQuery({}).subscribe({
           next: (data: TagSubscriptionData) => {
-            setAvailableTags(data.items.map(tag => ({
+            const tagData = data.items.map(tag => ({
               id: tag.id,
               name: tag.name || "",
               color: tag.color || "#f89520"
-            })));
+            }));
+            setAvailableTags(tagData);
+            console.log("Tags updated via subscription:", tagData);
           },
           error: (err: AppError) => {
             const typedError = err as AppError;
@@ -188,6 +196,7 @@ function UserInterface() {
       }
     } else {
       console.error("Demo or Tag models don't exist yet!");
+      console.log("Available models:", availableModels);
       setIsLoading(false);
     }
   }, []);
@@ -354,25 +363,35 @@ function UserInterface() {
                   🏷️ Filter by Tags
                 </label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {availableTags.map(tag => (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      onClick={() => handleFilterTagToggle(tag.id)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: '20px',
-                        border: 'none',
-                        cursor: 'pointer',
-                        backgroundColor: selectedFilterTags.includes(tag.id) ? tag.color : '#444',
-                        color: 'white',
-                        fontSize: isMobile ? '12px' : '14px',
-                        transition: 'background-color 0.2s'
-                      }}
-                    >
-                      {tag.name}
-                    </button>
-                  ))}
+                  {availableTags.length > 0 ? (
+                    availableTags.map(tag => (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => handleFilterTagToggle(tag.id)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '20px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          backgroundColor: selectedFilterTags.includes(tag.id) ? tag.color : '#444',
+                          color: 'white',
+                          fontSize: isMobile ? '12px' : '14px',
+                          transition: 'background-color 0.2s'
+                        }}
+                      >
+                        {tag.name}
+                      </button>
+                    ))
+                  ) : (
+                    <div style={{ 
+                      color: '#666', 
+                      fontSize: isMobile ? '12px' : '14px',
+                      padding: '8px 0'
+                    }}>
+                      Loading tags...
+                    </div>
+                  )}
                 </div>
                 
                 {/* Filter Status */}
