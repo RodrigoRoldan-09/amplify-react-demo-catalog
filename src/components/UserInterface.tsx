@@ -78,7 +78,7 @@ function UserInterface() {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
 
-  // Load tags - Enhanced with better error handling
+  // Load tags - Enhanced with better error handling and null safety
   const loadTags = async () => {
     try {
       console.log("Attempting to load tags manually...");
@@ -87,13 +87,17 @@ function UserInterface() {
       console.log("Tag list response:", allTagsResponse);
       
       if (allTagsResponse.data) {
-        const tagData = allTagsResponse.data.map(tag => ({
-          id: tag.id,
-          name: tag.name || "",
-          color: tag.color || "#f89520"
-        }));
-        setAvailableTags(tagData);
-        console.log("Tags loaded manually:", tagData);
+        // Filter out null/invalid tags and add null safety
+        const validTags = allTagsResponse.data
+          .filter(tag => tag && tag.id && tag.name) // Only include valid tags
+          .map(tag => ({
+            id: tag.id,
+            name: tag.name || "",
+            color: tag.color || "#f89520"
+          }));
+        setAvailableTags(validTags);
+        console.log("Valid tags loaded manually:", validTags);
+        console.log(`Filtered ${allTagsResponse.data.length - validTags.length} invalid tags`);
       } else {
         console.log("No tag data received");
         setAvailableTags([]);
@@ -140,17 +144,21 @@ function UserInterface() {
           }
         });
 
-        // Set up subscription to Tag model - SIMPLIFIED
+        // Set up subscription to Tag model - SIMPLIFIED with null safety
         const tagSubscription = client.models.Tag.observeQuery({}).subscribe({
           next: (data: TagSubscriptionData) => {
             console.log("Raw tag data received:", data);
-            const tagData = data.items.map(tag => ({
-              id: tag.id,
-              name: tag.name || "",
-              color: tag.color || "#f89520"
-            }));
-            console.log("Processed tag data:", tagData);
-            setAvailableTags(tagData);
+            // Filter out null/invalid tags and add null safety
+            const validTags = data.items
+              .filter(tag => tag && tag.id && tag.name) // Only include valid tags
+              .map(tag => ({
+                id: tag.id,
+                name: tag.name || "",
+                color: tag.color || "#f89520"
+              }));
+            console.log("Valid processed tag data:", validTags);
+            console.log(`Filtered ${data.items.length - validTags.length} invalid tags`);
+            setAvailableTags(validTags);
           },
           error: (err: AppError) => {
             const typedError = err as AppError;
@@ -165,12 +173,17 @@ function UserInterface() {
           next: async (data: DemoTagSubscriptionData) => {
             console.log("DemoTag relationships received:", data.items.length);
             
-            // Fetch tag details for each relationship
+            // Fetch tag details for each relationship with null safety
             const enrichedDemoTags: DemoTagItem[] = [];
             for (const item of data.items) {
+              if (!item || !item.tagId || !item.demoId) {
+                console.log("Skipping invalid DemoTag item:", item);
+                continue;
+              }
+              
               try {
                 const tagResponse = await client.models.Tag.get({ id: item.tagId });
-                if (tagResponse.data) {
+                if (tagResponse.data && tagResponse.data.id && tagResponse.data.name) {
                   enrichedDemoTags.push({
                     id: item.id,
                     demoId: item.demoId,
@@ -181,9 +194,11 @@ function UserInterface() {
                       color: tagResponse.data.color || "#f89520"
                     }
                   });
+                } else {
+                  console.log(`Tag ${item.tagId} not found or invalid`);
                 }
               } catch (error) {
-                console.error("Error fetching tag:", error);
+                console.error(`Error fetching tag ${item.tagId}:`, error);
               }
             }
             setDemoTags(enrichedDemoTags);

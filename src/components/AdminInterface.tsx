@@ -149,14 +149,18 @@ function AdminInterface() {
         setDebugInfo(prev => prev + "\nPredefined tags created");
       }
       
-      // Fetch all tags
+      // Fetch all tags with null safety
       const allTagsResponse = await client.models.Tag.list({});
       if (allTagsResponse.data) {
-        setAvailableTags(allTagsResponse.data.map(tag => ({
-          id: tag.id,
-          name: tag.name || "",
-          color: tag.color || TAG_COLORS[0]
-        })));
+        const validTags = allTagsResponse.data
+          .filter(tag => tag && tag.id && tag.name) // Filter out null/invalid tags
+          .map(tag => ({
+            id: tag.id,
+            name: tag.name || "",
+            color: tag.color || TAG_COLORS[0]
+          }));
+        setAvailableTags(validTags);
+        setDebugInfo(prev => prev + `\nLoaded ${validTags.length} valid tags`);
       }
     } catch (error) {
       const typedError = error as AppError;
@@ -252,11 +256,16 @@ function AdminInterface() {
         const tagSubscription = client.models.Tag.observeQuery({}).subscribe({
           next: (data: TagSubscriptionData) => {
             setDebugInfo(prev => prev + "\nTag data received: " + data.items.length + " tags");
-            setAvailableTags(data.items.map(tag => ({
-              id: tag.id,
-              name: tag.name || "",
-              color: tag.color || TAG_COLORS[0]
-            })));
+            // Filter out null/invalid tags and add null safety
+            const validTags = data.items
+              .filter(tag => tag && tag.id && tag.name) // Only include valid tags
+              .map(tag => ({
+                id: tag.id,
+                name: tag.name || "",
+                color: tag.color || TAG_COLORS[0]
+              }));
+            setAvailableTags(validTags);
+            setDebugInfo(prev => prev + `\nProcessed ${validTags.length} valid tags`);
           },
           error: (err: AppError) => {
             const typedError = err as AppError;
@@ -269,12 +278,17 @@ function AdminInterface() {
           next: async (data: DemoTagSubscriptionData) => {
             setDebugInfo(prev => prev + "\nDemoTag data received: " + data.items.length + " relationships");
             
-            // Fetch tag details for each relationship
+            // Fetch tag details for each relationship with null safety
             const enrichedDemoTags: DemoTagItem[] = [];
             for (const item of data.items) {
+              if (!item || !item.tagId || !item.demoId) {
+                setDebugInfo(prev => prev + "\nSkipping invalid DemoTag item");
+                continue;
+              }
+              
               try {
                 const tagResponse = await client.models.Tag.get({ id: item.tagId });
-                if (tagResponse.data) {
+                if (tagResponse.data && tagResponse.data.id && tagResponse.data.name) {
                   enrichedDemoTags.push({
                     id: item.id,
                     demoId: item.demoId,
@@ -285,12 +299,15 @@ function AdminInterface() {
                       color: tagResponse.data.color || TAG_COLORS[0]
                     }
                   });
+                } else {
+                  setDebugInfo(prev => prev + `\nTag ${item.tagId} not found or invalid`);
                 }
               } catch (error) {
-                console.error("Error fetching tag:", error);
+                setDebugInfo(prev => prev + `\nError fetching tag ${item.tagId}: ${error}`);
               }
             }
             setDemoTags(enrichedDemoTags);
+            setDebugInfo(prev => prev + `\nProcessed ${enrichedDemoTags.length} valid demo-tag relationships`);
           },
           error: (err: AppError) => {
             const typedError = err as AppError;
