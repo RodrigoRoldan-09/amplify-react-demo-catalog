@@ -1,4 +1,4 @@
-// UserInterface.tsx - Fixed version with proper TypeScript types
+// UserInterface.tsx - Responsive with Color Support - FIXED
 import { useEffect, useState } from "react";
 import type { Schema } from "../../amplify/data/resource";
 import { generateClient } from "aws-amplify/data";
@@ -19,10 +19,11 @@ interface DemoItem {
   updatedAt: string;
 }
 
-// Tag type
+// Tag type with color
 interface TagItem {
   id: string;
   name: string;
+  color: string;
 }
 
 // DemoTag relationship type
@@ -43,6 +44,14 @@ interface SubscriptionData {
     imageUrl?: GraphQLNullable<string>;
     createdAt: string;
     updatedAt: string;
+  }>;
+}
+
+interface TagSubscriptionData {
+  items: Array<{
+    id: string;
+    name: string;
+    color: string;
   }>;
 }
 
@@ -77,7 +86,8 @@ function UserInterface() {
       if (allTagsResponse.data) {
         setAvailableTags(allTagsResponse.data.map(tag => ({
           id: tag.id,
-          name: tag.name || ""
+          name: tag.name || "",
+          color: tag.color || "#f89520"
         })));
       }
     } catch (error) {
@@ -119,6 +129,21 @@ function UserInterface() {
           }
         });
 
+        // Set up subscription to Tag model
+        const tagSubscription = client.models.Tag.observeQuery({}).subscribe({
+          next: (data: TagSubscriptionData) => {
+            setAvailableTags(data.items.map(tag => ({
+              id: tag.id,
+              name: tag.name || "",
+              color: tag.color || "#f89520"
+            })));
+          },
+          error: (err: AppError) => {
+            const typedError = err as AppError;
+            console.error("Error in Tag subscription:", typedError.message);
+          }
+        });
+
         // Set up subscription to DemoTag relationships
         const demoTagSubscription = client.models.DemoTag.observeQuery({}).subscribe({
           next: async (data: DemoTagSubscriptionData) => {
@@ -134,7 +159,8 @@ function UserInterface() {
                     tagId: item.tagId,
                     tag: {
                       id: tagResponse.data.id,
-                      name: tagResponse.data.name || ""
+                      name: tagResponse.data.name || "",
+                      color: tagResponse.data.color || "#f89520"
                     }
                   });
                 }
@@ -152,6 +178,7 @@ function UserInterface() {
         
         return () => {
           demoSubscription.unsubscribe();
+          tagSubscription.unsubscribe();
           demoTagSubscription.unsubscribe();
         };
       } catch (error) {
@@ -165,11 +192,14 @@ function UserInterface() {
     }
   }, []);
 
-  // Get tag names for display
-  function getTagNames(demo: DemoItem): string[] {
+  // Get tag names and colors for display
+  function getTagInfo(demo: DemoItem): Array<{ name: string; color: string }> {
     return demoTags
       .filter(dt => dt.demoId === demo.id && dt.tag)
-      .map(dt => dt.tag!.name);
+      .map(dt => ({ 
+        name: dt.tag!.name, 
+        color: dt.tag!.color 
+      }));
   }
 
   // Filter demos based on search term and selected filter tags
@@ -209,34 +239,51 @@ function UserInterface() {
     setSearchTerm(e.target.value);
   }
 
-  // UI part - Clean user interface without admin features
+  // Check if we're on mobile
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+  const isSmallMobile = typeof window !== 'undefined' && window.innerWidth <= 480;
+
+  // UI part - Responsive clean user interface
   return (
     <div style={{ 
       backgroundColor: '#121212', 
       minHeight: '100vh',
       width: '100%',
-      padding: '20px'
+      padding: '10px'
     }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         <header style={{ 
           display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '20px'
+          alignItems: isMobile ? 'stretch' : 'center',
+          marginBottom: '20px',
+          gap: '10px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <h1 style={{ color: '#f89520', margin: 0 }}>OrangeSlice</h1>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '10px',
+            flexWrap: 'wrap'
+          }}>
+            <h1 style={{ 
+              color: '#f89520', 
+              margin: 0,
+              fontSize: isMobile ? '20px' : '24px'
+            }}>
+              Demo Catalog
+            </h1>
             
             <button 
               onClick={clearAllFilters}
               style={{
                 backgroundColor: '#666',
                 color: 'white',
-                padding: '8px 16px',
+                padding: '8px 12px',
                 border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer',
-                fontSize: '14px'
+                fontSize: '12px'
               }}
             >
               🏠 Home
@@ -248,7 +295,8 @@ function UserInterface() {
             padding: '8px 16px', 
             borderRadius: '4px',
             color: '#ddd',
-            fontSize: '14px'
+            fontSize: isMobile ? '12px' : '14px',
+            textAlign: 'center'
           }}>
             {getFilteredDemos().length} Project{getFilteredDemos().length !== 1 ? 's' : ''}
           </div>
@@ -263,13 +311,18 @@ function UserInterface() {
             {/* Filter Section */}
             <div style={{ 
               backgroundColor: '#222', 
-              padding: '20px', 
+              padding: isMobile ? '15px' : '20px', 
               borderRadius: '8px', 
               marginBottom: '20px',
               border: '1px solid #333'
             }}>
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', color: 'white' }}>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: '8px', 
+                  color: 'white',
+                  fontSize: isMobile ? '14px' : '16px'
+                }}>
                   🔍 Search by Project Name
                   <input
                     type="text"
@@ -283,14 +336,21 @@ function UserInterface() {
                       color: 'white',
                       border: '1px solid #444',
                       borderRadius: '4px',
-                      marginTop: '8px'
+                      marginTop: '8px',
+                      fontSize: isMobile ? '14px' : '16px',
+                      boxSizing: 'border-box'
                     }}
                   />
                 </label>
               </div>
               
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', color: 'white' }}>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: '8px', 
+                  color: 'white',
+                  fontSize: isMobile ? '14px' : '16px'
+                }}>
                   🏷️ Filter by Tags
                 </label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -300,13 +360,13 @@ function UserInterface() {
                       type="button"
                       onClick={() => handleFilterTagToggle(tag.id)}
                       style={{
-                        padding: '8px 16px',
+                        padding: '6px 12px',
                         borderRadius: '20px',
                         border: 'none',
                         cursor: 'pointer',
-                        backgroundColor: selectedFilterTags.includes(tag.id) ? '#f89520' : '#444',
+                        backgroundColor: selectedFilterTags.includes(tag.id) ? tag.color : '#444',
                         color: 'white',
-                        fontSize: '14px',
+                        fontSize: isMobile ? '12px' : '14px',
                         transition: 'background-color 0.2s'
                       }}
                     >
@@ -317,7 +377,7 @@ function UserInterface() {
                 
                 {/* Filter Status */}
                 {(searchTerm || selectedFilterTags.length > 0) && (
-                  <div style={{ marginTop: '12px', color: '#ddd', fontSize: '14px' }}>
+                  <div style={{ marginTop: '12px', color: '#ddd', fontSize: isMobile ? '12px' : '14px' }}>
                     Active filters: 
                     {searchTerm && <span style={{ color: '#f89520' }}> Search: "{searchTerm}"</span>}
                     {selectedFilterTags.length > 0 && (
@@ -334,7 +394,7 @@ function UserInterface() {
                         cursor: 'pointer',
                         textDecoration: 'underline',
                         marginLeft: '10px',
-                        fontSize: '14px'
+                        fontSize: isMobile ? '12px' : '14px'
                       }}
                     >
                       Clear all filters
@@ -346,7 +406,7 @@ function UserInterface() {
             
             <div style={{ 
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
               gap: '20px'
             }}>
               {getFilteredDemos().map((demo) => (
@@ -390,7 +450,7 @@ function UserInterface() {
                   <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
                     <h3 style={{ 
                       color: 'white', 
-                      fontSize: '18px', 
+                      fontSize: isMobile ? '16px' : '18px', 
                       marginTop: 0,
                       marginBottom: '12px'
                     }}>
@@ -400,18 +460,18 @@ function UserInterface() {
                     {/* Display Tags */}
                     <div style={{ marginBottom: '16px' }}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                        {getTagNames(demo).map(tagName => (
+                        {getTagInfo(demo).map(tag => (
                           <span
-                            key={tagName}
+                            key={tag.name}
                             style={{
-                              padding: '4px 8px',
-                              backgroundColor: '#f89520',
+                              padding: '3px 6px',
+                              backgroundColor: tag.color,
                               color: 'white',
                               borderRadius: '12px',
-                              fontSize: '12px'
+                              fontSize: isMobile ? '10px' : '12px'
                             }}
                           >
-                            {tagName}
+                            {tag.name}
                           </span>
                         ))}
                       </div>
@@ -420,7 +480,8 @@ function UserInterface() {
                     <div style={{ 
                       display: 'flex', 
                       gap: '10px',
-                      marginTop: 'auto'
+                      marginTop: 'auto',
+                      flexDirection: isSmallMobile ? 'column' : 'row'
                     }}>
                       {demo.githubLink && (
                         <a 
@@ -435,7 +496,8 @@ function UserInterface() {
                             textDecoration: 'none',
                             flex: 1,
                             textAlign: 'center',
-                            transition: 'background-color 0.2s'
+                            transition: 'background-color 0.2s',
+                            fontSize: isMobile ? '12px' : '14px'
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.backgroundColor = '#555';
@@ -461,7 +523,8 @@ function UserInterface() {
                             textDecoration: 'none',
                             flex: 1,
                             textAlign: 'center',
-                            transition: 'background-color 0.2s'
+                            transition: 'background-color 0.2s',
+                            fontSize: isMobile ? '12px' : '14px'
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.backgroundColor = '#e67e00';
@@ -489,13 +552,13 @@ function UserInterface() {
                 border: '1px solid #333'
               }}>
                 {demos.length === 0 ? (
-                  <p style={{ marginBottom: '20px' }}>No demos available yet. Check back soon!</p>
+                  <p style={{ marginBottom: '20px', fontSize: isMobile ? '14px' : '16px' }}>No demos available yet. Check back soon!</p>
                 ) : (
                   <>
-                    <p style={{ marginBottom: '20px' }}>
+                    <p style={{ marginBottom: '20px', fontSize: isMobile ? '14px' : '16px' }}>
                       No projects match your current filters.
                     </p>
-                    <p style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px' }}>
+                    <p style={{ marginBottom: '20px', color: '#ddd', fontSize: isMobile ? '12px' : '14px' }}>
                       {searchTerm && `Search: "${searchTerm}"`}
                       {searchTerm && selectedFilterTags.length > 0 && ' • '}
                       {selectedFilterTags.length > 0 && `${selectedFilterTags.length} tag filter(s) active`}
@@ -508,7 +571,8 @@ function UserInterface() {
                         padding: '10px 16px',
                         border: 'none',
                         borderRadius: '4px',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        fontSize: isMobile ? '14px' : '16px'
                       }}
                     >
                       Clear All Filters

@@ -1,4 +1,4 @@
-// AdminInterface.tsx - Fixed version with proper TypeScript types
+// AdminInterface.tsx - Responsive with Add Tag Feature and Color Support
 import { useEffect, useState } from "react";
 import type { Schema } from "../../amplify/data/resource";
 import { generateClient } from "aws-amplify/data";
@@ -19,10 +19,11 @@ interface DemoItem {
   updatedAt: string;
 }
 
-// Tag type
+// Tag type with color
 interface TagItem {
   id: string;
   name: string;
+  color: string;
 }
 
 // DemoTag relationship type
@@ -46,6 +47,14 @@ interface SubscriptionData {
   }>;
 }
 
+interface TagSubscriptionData {
+  items: Array<{
+    id: string;
+    name: string;
+    color: string;
+  }>;
+}
+
 interface DemoTagSubscriptionData {
   items: Array<{
     id: string;
@@ -57,6 +66,20 @@ interface DemoTagSubscriptionData {
 // Define a type for errors
 type AppError = Error | { message: string };
 
+// 10 predefined colors that work with orange-black theme
+const TAG_COLORS = [
+  '#e74c3c', // Red
+  '#3498db', // Blue
+  '#2ecc71', // Green
+  '#9b59b6', // Purple
+  '#f39c12', // Orange (different shade)
+  '#1abc9c', // Teal
+  '#e67e22', // Dark Orange
+  '#34495e', // Dark Blue-Gray
+  '#27ae60', // Dark Green
+  '#8e44ad'  // Dark Purple
+];
+
 function AdminInterface() {
   // Debug state to see what's happening
   const [debugInfo, setDebugInfo] = useState<string>("Initializing...");
@@ -66,13 +89,18 @@ function AdminInterface() {
   // State for demos and tags
   const [demos, setDemos] = useState<DemoItem[]>([]);
   const [demoTags, setDemoTags] = useState<DemoTagItem[]>([]);
-  const [availableTags, setAvailableTags] = useState<TagItem[]>([]);
+  const [availableTags, setAvaileTags] = useState<TagItem[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
   // Filter state
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
+  
+  // Add tag popup state
+  const [isAddTagOpen, setIsAddTagOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [addTagError, setAddTagError] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -92,9 +120,22 @@ function AdminInterface() {
     tags: false
   });
 
-  // Initialize predefined tags
+  // Get next available color for new tags
+  const getNextAvailableColor = (): string => {
+    const usedColors = availableTags.map(tag => tag.color);
+    const availableColors = TAG_COLORS.filter(color => !usedColors.includes(color));
+    return availableColors.length > 0 ? availableColors[0] : TAG_COLORS[0];
+  };
+
+  // Initialize predefined tags with colors
   const initializeTags = async () => {
-    const predefinedTags = ["Games", "ML", "Analytics", "M&E", "Generative AI"];
+    const predefinedTags = [
+      { name: "Games", color: TAG_COLORS[0] },
+      { name: "ML", color: TAG_COLORS[1] },
+      { name: "Analytics", color: TAG_COLORS[2] },
+      { name: "M&E", color: TAG_COLORS[3] },
+      { name: "Generative AI", color: TAG_COLORS[4] }
+    ];
     
     try {
       // Check if tags already exist
@@ -102,8 +143,8 @@ function AdminInterface() {
       
       if (existingTags.data && existingTags.data.length === 0) {
         // Create predefined tags if they don't exist
-        for (const tagName of predefinedTags) {
-          await client.models.Tag.create({ name: tagName });
+        for (const tag of predefinedTags) {
+          await client.models.Tag.create({ name: tag.name, color: tag.color });
         }
         setDebugInfo(prev => prev + "\nPredefined tags created");
       }
@@ -111,14 +152,49 @@ function AdminInterface() {
       // Fetch all tags
       const allTagsResponse = await client.models.Tag.list({});
       if (allTagsResponse.data) {
-        setAvailableTags(allTagsResponse.data.map(tag => ({
+        setAvaileTags(allTagsResponse.data.map(tag => ({
           id: tag.id,
-          name: tag.name || ""
+          name: tag.name || "",
+          color: tag.color || TAG_COLORS[0]
         })));
       }
     } catch (error) {
       const typedError = error as AppError;
       setDebugInfo(prev => prev + "\nError initializing tags: " + typedError.message);
+    }
+  };
+
+  // Add new tag function
+  const handleAddTag = async () => {
+    if (!newTagName.trim()) {
+      setAddTagError(true);
+      return;
+    }
+
+    // Check if tag already exists
+    const tagExists = availableTags.some(tag => 
+      tag.name.toLowerCase() === newTagName.trim().toLowerCase()
+    );
+
+    if (tagExists) {
+      setAddTagError(true);
+      return;
+    }
+
+    try {
+      const nextColor = getNextAvailableColor();
+      await client.models.Tag.create({ 
+        name: newTagName.trim(), 
+        color: nextColor 
+      });
+      
+      setNewTagName("");
+      setIsAddTagOpen(false);
+      setAddTagError(false);
+      setDebugInfo(prev => prev + `\nNew tag "${newTagName.trim()}" created`);
+    } catch (error) {
+      const typedError = error as AppError;
+      setDebugInfo(prev => prev + "\nError creating tag: " + typedError.message);
     }
   };
 
@@ -161,6 +237,21 @@ function AdminInterface() {
           }
         });
 
+        // Set up subscription to Tag model
+        const tagSubscription = client.models.Tag.observeQuery({}).subscribe({
+          next: (data: TagSubscriptionData) => {
+            setAvaileTags(data.items.map(tag => ({
+              id: tag.id,
+              name: tag.name || "",
+              color: tag.color || TAG_COLORS[0]
+            })));
+          },
+          error: (err: AppError) => {
+            const typedError = err as AppError;
+            setDebugInfo(prev => prev + "\nError in Tag subscription: " + typedError.message);
+          }
+        });
+
         // Set up subscription to DemoTag relationships
         const demoTagSubscription = client.models.DemoTag.observeQuery({}).subscribe({
           next: async (data: DemoTagSubscriptionData) => {
@@ -178,7 +269,8 @@ function AdminInterface() {
                     tagId: item.tagId,
                     tag: {
                       id: tagResponse.data.id,
-                      name: tagResponse.data.name || ""
+                      name: tagResponse.data.name || "",
+                      color: tagResponse.data.color || TAG_COLORS[0]
                     }
                   });
                 }
@@ -196,6 +288,7 @@ function AdminInterface() {
         
         return () => {
           demoSubscription.unsubscribe();
+          tagSubscription.unsubscribe();
           demoTagSubscription.unsubscribe();
         };
       } catch (error) {
@@ -421,10 +514,13 @@ function AdminInterface() {
   }
 
   // Get tag names for display
-  function getTagNames(demo: DemoItem): string[] {
+  function getTagNames(demo: DemoItem): Array<{ name: string; color: string }> {
     return demoTags
       .filter(dt => dt.demoId === demo.id && dt.tag)
-      .map(dt => dt.tag!.name);
+      .map(dt => ({ 
+        name: dt.tag!.name, 
+        color: dt.tag!.color 
+      }));
   }
 
   // Filter demos based on search term and selected filter tags
@@ -464,34 +560,55 @@ function AdminInterface() {
     setSearchTerm(e.target.value);
   }
 
-  // UI part - Updated to match the dark theme
+  // Handle new tag input change
+  function handleNewTagChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setNewTagName(e.target.value);
+    if (addTagError) {
+      setAddTagError(false);
+    }
+  }
+
+  // UI part - Responsive design
   return (
     <div style={{ 
       backgroundColor: '#121212', 
       minHeight: '100vh',
       width: '100%',
-      padding: '20px'
+      padding: '10px'
     }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         <header style={{ 
           display: 'flex',
+          flexDirection: window.innerWidth <= 768 ? 'column' : 'row',
           justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '20px'
+          alignItems: window.innerWidth <= 768 ? 'stretch' : 'center',
+          marginBottom: '20px',
+          gap: '10px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <h1 style={{ color: '#f89520', margin: 0 }}>OrangeSlice Admin</h1>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '10px',
+            flexWrap: 'wrap'
+          }}>
+            <h1 style={{ 
+              color: '#f89520', 
+              margin: 0,
+              fontSize: window.innerWidth <= 768 ? '20px' : '24px'
+            }}>
+              Demo Catalog - Admin
+            </h1>
             
             <button 
               onClick={clearAllFilters}
               style={{
                 backgroundColor: '#666',
                 color: 'white',
-                padding: '8px 16px',
+                padding: '8px 12px',
                 border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer',
-                fontSize: '14px'
+                fontSize: '12px'
               }}
             >
               🏠 Home
@@ -502,11 +619,11 @@ function AdminInterface() {
               style={{
                 backgroundColor: '#2196f3',
                 color: 'white',
-                padding: '8px 16px',
+                padding: '8px 12px',
                 border: 'none',
                 borderRadius: '4px',
                 textDecoration: 'none',
-                fontSize: '14px'
+                fontSize: '12px'
               }}
             >
               👁️ View Public Site
@@ -521,7 +638,8 @@ function AdminInterface() {
               padding: '10px 16px',
               border: 'none',
               borderRadius: '4px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontSize: window.innerWidth <= 768 ? '14px' : '16px'
             }}
           >
             + Add Project
@@ -536,20 +654,22 @@ function AdminInterface() {
           backgroundColor: '#222',
           color: '#ddd',
           borderRadius: '8px',
-          whiteSpace: 'pre-wrap'
+          whiteSpace: 'pre-wrap',
+          fontSize: window.innerWidth <= 768 ? '12px' : '14px'
         }}>
-          <h3>Debug Info (Remove in production)</h3>
+          <h3 style={{ fontSize: window.innerWidth <= 768 ? '14px' : '16px' }}>Debug Info (Remove in production)</h3>
           <button onClick={testDatabase} style={{ 
             backgroundColor: '#f89520',
             color: 'white',
-            padding: '8px 12px',
+            padding: '6px 10px',
             border: 'none',
             borderRadius: '4px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            fontSize: '12px'
           }}>
             Test Database
           </button>
-          <div style={{ marginTop: '10px' }}>{debugInfo}</div>
+          <div style={{ marginTop: '10px', fontSize: '12px' }}>{debugInfo}</div>
         </div>
         
         {!modelExists && (
@@ -559,7 +679,8 @@ function AdminInterface() {
             backgroundColor: '#301b1b', 
             color: '#f44336',
             borderRadius: '8px',
-            marginBottom: '20px'
+            marginBottom: '20px',
+            fontSize: window.innerWidth <= 768 ? '14px' : '16px'
           }}>
             <strong>Backend Configuration Issue:</strong> The Demo or Tag models do not exist in your backend yet. 
             <p>Your backend needs to be updated to include both Demo and Tag models. Please check the AWS Amplify Console to see if your deployment is complete.</p>
@@ -576,13 +697,13 @@ function AdminInterface() {
             {!isFormOpen && (
               <div style={{ 
                 backgroundColor: '#222', 
-                padding: '20px', 
+                padding: window.innerWidth <= 768 ? '15px' : '20px', 
                 borderRadius: '8px', 
                 marginBottom: '20px',
                 border: '1px solid #333'
               }}>
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', marginBottom: '8px', color: 'white' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'white', fontSize: window.innerWidth <= 768 ? '14px' : '16px' }}>
                     🔍 Search by Project Name
                     <input
                       type="text"
@@ -596,14 +717,16 @@ function AdminInterface() {
                         color: 'white',
                         border: '1px solid #444',
                         borderRadius: '4px',
-                        marginTop: '8px'
+                        marginTop: '8px',
+                        fontSize: window.innerWidth <= 768 ? '14px' : '16px',
+                        boxSizing: 'border-box'
                       }}
                     />
                   </label>
                 </div>
                 
                 <div>
-                  <label style={{ display: 'block', marginBottom: '8px', color: 'white' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'white', fontSize: window.innerWidth <= 768 ? '14px' : '16px' }}>
                     🏷️ Filter by Tags
                   </label>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -613,13 +736,13 @@ function AdminInterface() {
                         type="button"
                         onClick={() => handleFilterTagToggle(tag.id)}
                         style={{
-                          padding: '8px 16px',
+                          padding: '6px 12px',
                           borderRadius: '20px',
                           border: 'none',
                           cursor: 'pointer',
-                          backgroundColor: selectedFilterTags.includes(tag.id) ? '#f89520' : '#444',
+                          backgroundColor: selectedFilterTags.includes(tag.id) ? tag.color : '#444',
                           color: 'white',
-                          fontSize: '14px',
+                          fontSize: window.innerWidth <= 768 ? '12px' : '14px',
                           transition: 'background-color 0.2s'
                         }}
                       >
@@ -630,7 +753,7 @@ function AdminInterface() {
                   
                   {/* Filter Status */}
                   {(searchTerm || selectedFilterTags.length > 0) && (
-                    <div style={{ marginTop: '12px', color: '#ddd', fontSize: '14px' }}>
+                    <div style={{ marginTop: '12px', color: '#ddd', fontSize: window.innerWidth <= 768 ? '12px' : '14px' }}>
                       Active filters: 
                       {searchTerm && <span style={{ color: '#f89520' }}> Search: "{searchTerm}"</span>}
                       {selectedFilterTags.length > 0 && (
@@ -647,7 +770,7 @@ function AdminInterface() {
                           cursor: 'pointer',
                           textDecoration: 'underline',
                           marginLeft: '10px',
-                          fontSize: '14px'
+                          fontSize: window.innerWidth <= 768 ? '12px' : '14px'
                         }}
                       >
                         Clear all filters
@@ -658,18 +781,109 @@ function AdminInterface() {
               </div>
             )}
 
+            {/* Add Tag Popup */}
+            {isAddTagOpen && (
+              <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 1000
+              }}>
+                <div style={{
+                  backgroundColor: '#222',
+                  padding: '20px',
+                  borderRadius: '8px',
+                  border: '2px solid #f89520',
+                  maxWidth: '90%',
+                  width: '400px'
+                }}>
+                  <h3 style={{ color: '#f89520', marginTop: 0 }}>Add New Tag</h3>
+                  <input
+                    type="text"
+                    value={newTagName}
+                    onChange={handleNewTagChange}
+                    placeholder="Enter tag name..."
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      backgroundColor: '#333',
+                      color: 'white',
+                      border: addTagError ? '1px solid #f44336' : '1px solid #444',
+                      borderRadius: '4px',
+                      marginBottom: '10px',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  {addTagError && (
+                    <p style={{ color: '#f44336', fontSize: '14px', margin: '0 0 10px 0' }}>
+                      Tag name is required and must be unique
+                    </p>
+                  )}
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={() => {
+                        setIsAddTagOpen(false);
+                        setNewTagName("");
+                        setAddTagError(false);
+                      }}
+                      style={{
+                        backgroundColor: '#666',
+                        color: 'white',
+                        padding: '8px 16px',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAddTag}
+                      style={{
+                        backgroundColor: '#f89520',
+                        color: 'white',
+                        padding: '8px 16px',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Add New Tag
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {isFormOpen && (
               <div style={{ 
                 backgroundColor: '#222', 
-                padding: '20px', 
+                padding: window.innerWidth <= 768 ? '15px' : '20px', 
                 borderRadius: '8px', 
                 marginBottom: '20px',
                 border: '1px solid #333'
               }}>
-                <h2 style={{ color: 'white', marginTop: 0 }}>{editingId ? 'Edit Demo' : 'Add New Demo'}</h2>
+                <h2 style={{ 
+                  color: 'white', 
+                  marginTop: 0,
+                  fontSize: window.innerWidth <= 768 ? '18px' : '20px'
+                }}>
+                  {editingId ? 'Edit Demo' : 'Add New Demo'}
+                </h2>
                 <form onSubmit={handleSubmit}>
                   <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'white' }}>
+                    <label style={{ 
+                      display: 'block', 
+                      marginBottom: '8px', 
+                      color: 'white',
+                      fontSize: window.innerWidth <= 768 ? '14px' : '16px'
+                    }}>
                       Project Name *
                       <input
                         type="text"
@@ -682,15 +896,23 @@ function AdminInterface() {
                           backgroundColor: '#333',
                           color: 'white',
                           border: formErrors.projectName ? '1px solid #f44336' : '1px solid #444',
-                          borderRadius: '4px'
+                          borderRadius: '4px',
+                          marginTop: '5px',
+                          fontSize: window.innerWidth <= 768 ? '14px' : '16px',
+                          boxSizing: 'border-box'
                         }}
                       />
-                      {formErrors.projectName && <span style={{ color: '#f44336', fontSize: '14px' }}>Project name is required</span>}
+                      {formErrors.projectName && <span style={{ color: '#f44336', fontSize: '12px' }}>Project name is required</span>}
                     </label>
                   </div>
                   
                   <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'white' }}>
+                    <label style={{ 
+                      display: 'block', 
+                      marginBottom: '8px', 
+                      color: 'white',
+                      fontSize: window.innerWidth <= 768 ? '14px' : '16px'
+                    }}>
                       GitHub Link *
                       <input
                         type="text"
@@ -703,15 +925,23 @@ function AdminInterface() {
                           backgroundColor: '#333',
                           color: 'white',
                           border: formErrors.githubLink ? '1px solid #f44336' : '1px solid #444',
-                          borderRadius: '4px'
+                          borderRadius: '4px',
+                          marginTop: '5px',
+                          fontSize: window.innerWidth <= 768 ? '14px' : '16px',
+                          boxSizing: 'border-box'
                         }}
                       />
-                      {formErrors.githubLink && <span style={{ color: '#f44336', fontSize: '14px' }}>GitHub link is required</span>}
+                      {formErrors.githubLink && <span style={{ color: '#f44336', fontSize: '12px' }}>GitHub link is required</span>}
                     </label>
                   </div>
                   
                   <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'white' }}>
+                    <label style={{ 
+                      display: 'block', 
+                      marginBottom: '8px', 
+                      color: 'white',
+                      fontSize: window.innerWidth <= 768 ? '14px' : '16px'
+                    }}>
                       Project Link *
                       <input
                         type="text"
@@ -724,15 +954,23 @@ function AdminInterface() {
                           backgroundColor: '#333',
                           color: 'white',
                           border: formErrors.projectLink ? '1px solid #f44336' : '1px solid #444',
-                          borderRadius: '4px'
+                          borderRadius: '4px',
+                          marginTop: '5px',
+                          fontSize: window.innerWidth <= 768 ? '14px' : '16px',
+                          boxSizing: 'border-box'
                         }}
                       />
-                      {formErrors.projectLink && <span style={{ color: '#f44336', fontSize: '14px' }}>Project link is required</span>}
+                      {formErrors.projectLink && <span style={{ color: '#f44336', fontSize: '12px' }}>Project link is required</span>}
                     </label>
                   </div>
                   
                   <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'white' }}>
+                    <label style={{ 
+                      display: 'block', 
+                      marginBottom: '8px', 
+                      color: 'white',
+                      fontSize: window.innerWidth <= 768 ? '14px' : '16px'
+                    }}>
                       Image URL *
                       <input
                         type="text"
@@ -745,52 +983,87 @@ function AdminInterface() {
                           backgroundColor: '#333',
                           color: 'white',
                           border: formErrors.imageUrl ? '1px solid #f44336' : '1px solid #444',
-                          borderRadius: '4px'
+                          borderRadius: '4px',
+                          marginTop: '5px',
+                          fontSize: window.innerWidth <= 768 ? '14px' : '16px',
+                          boxSizing: 'border-box'
                         }}
                       />
-                      {formErrors.imageUrl && <span style={{ color: '#f44336', fontSize: '14px' }}>Image URL is required</span>}
+                      {formErrors.imageUrl && <span style={{ color: '#f44336', fontSize: '12px' }}>Image URL is required</span>}
                     </label>
                   </div>
                   
                   {/* Tags Section */}
                   <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'white' }}>
+                    <label style={{ 
+                      display: 'block', 
+                      marginBottom: '8px', 
+                      color: 'white',
+                      fontSize: window.innerWidth <= 768 ? '14px' : '16px'
+                    }}>
                       Tags *
                     </label>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
                       {availableTags.map(tag => (
                         <button
                           key={tag.id}
                           type="button"
                           onClick={() => handleTagToggle(tag.id)}
                           style={{
-                            padding: '8px 16px',
+                            padding: '6px 12px',
                             borderRadius: '20px',
                             border: 'none',
                             cursor: 'pointer',
-                            backgroundColor: selectedTags.includes(tag.id) ? '#f89520' : '#444',
+                            backgroundColor: selectedTags.includes(tag.id) ? tag.color : '#444',
                             color: 'white',
-                            fontSize: '14px'
+                            fontSize: window.innerWidth <= 768 ? '12px' : '14px'
                           }}
                         >
                           {tag.name}
                         </button>
                       ))}
+                      {/* Add Tag Button */}
+                      <button
+                        type="button"
+                        onClick={() => setIsAddTagOpen(true)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '50%',
+                          border: '2px dashed #f89520',
+                          backgroundColor: 'transparent',
+                          color: '#f89520',
+                          cursor: 'pointer',
+                          fontSize: '18px',
+                          width: '35px',
+                          height: '35px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title="Add new tag"
+                      >
+                        +
+                      </button>
                     </div>
-                    {formErrors.tags && <span style={{ color: '#f44336', fontSize: '14px' }}>At least one tag is required</span>}
+                    {formErrors.tags && <span style={{ color: '#f44336', fontSize: '12px' }}>At least one tag is required</span>}
                   </div>
                   
-                  <div style={{ display: 'flex', gap: '10px' }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    gap: '10px',
+                    flexDirection: window.innerWidth <= 768 ? 'column' : 'row'
+                  }}>
                     <button 
                       type="submit" 
                       style={{
-                        backgroundColor: '#4CAF50',
+                        backgroundColor: '#f89520',
                         color: 'white',
-                        padding: '10px 16px',
+                        padding: '12px 16px',
                         border: 'none',
                         borderRadius: '4px',
                         cursor: 'pointer',
-                        flex: 1
+                        flex: 1,
+                        fontSize: window.innerWidth <= 768 ? '14px' : '16px'
                       }}
                     >
                       {editingId ? 'Update Demo' : 'Add Demo'}
@@ -801,11 +1074,12 @@ function AdminInterface() {
                       style={{
                         backgroundColor: '#666',
                         color: 'white',
-                        padding: '10px 16px',
+                        padding: '12px 16px',
                         border: 'none',
                         borderRadius: '4px',
                         cursor: 'pointer',
-                        flex: 1
+                        flex: 1,
+                        fontSize: window.innerWidth <= 768 ? '14px' : '16px'
                       }}
                     >
                       Cancel
@@ -817,7 +1091,7 @@ function AdminInterface() {
             
             <div style={{ 
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              gridTemplateColumns: window.innerWidth <= 768 ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
               gap: '20px'
             }}>
               {getFilteredDemos().map((demo, index) => (
@@ -850,7 +1124,7 @@ function AdminInterface() {
                   <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
                     <h3 style={{ 
                       color: 'white', 
-                      fontSize: '18px', 
+                      fontSize: window.innerWidth <= 768 ? '16px' : '18px', 
                       marginTop: 0,
                       marginBottom: '12px'
                     }}>
@@ -860,18 +1134,18 @@ function AdminInterface() {
                     {/* Display Tags */}
                     <div style={{ marginBottom: '12px' }}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                        {getTagNames(demo).map(tagName => (
+                        {getTagNames(demo).map(tag => (
                           <span
-                            key={tagName}
+                            key={tag.name}
                             style={{
-                              padding: '4px 8px',
-                              backgroundColor: '#f89520',
+                              padding: '3px 6px',
+                              backgroundColor: tag.color,
                               color: 'white',
                               borderRadius: '12px',
-                              fontSize: '12px'
+                              fontSize: window.innerWidth <= 768 ? '10px' : '12px'
                             }}
                           >
-                            {tagName}
+                            {tag.name}
                           </span>
                         ))}
                       </div>
@@ -884,7 +1158,11 @@ function AdminInterface() {
                             href={demo.githubLink} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            style={{ color: '#2196f3' }}
+                            style={{ 
+                              color: '#2196f3',
+                              fontSize: window.innerWidth <= 768 ? '12px' : '14px',
+                              wordBreak: 'break-all'
+                            }}
                           >
                             GitHub Repository
                           </a>
@@ -897,7 +1175,11 @@ function AdminInterface() {
                             href={demo.projectLink} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            style={{ color: '#2196f3' }}
+                            style={{ 
+                              color: '#2196f3',
+                              fontSize: window.innerWidth <= 768 ? '12px' : '14px',
+                              wordBreak: 'break-all'
+                            }}
                           >
                             Live Project
                           </a>
@@ -908,7 +1190,8 @@ function AdminInterface() {
                     <div style={{ 
                       display: 'flex', 
                       gap: '10px',
-                      marginTop: 'auto'
+                      marginTop: 'auto',
+                      flexDirection: window.innerWidth <= 480 ? 'column' : 'row'
                     }}>
                       <button 
                         onClick={() => demo.id && openEditForm(demo)}
@@ -919,7 +1202,8 @@ function AdminInterface() {
                           border: 'none',
                           borderRadius: '4px',
                           cursor: 'pointer',
-                          flex: 1
+                          flex: 1,
+                          fontSize: window.innerWidth <= 768 ? '12px' : '14px'
                         }}
                       >
                         Edit
@@ -933,7 +1217,8 @@ function AdminInterface() {
                           border: 'none',
                           borderRadius: '4px',
                           cursor: 'pointer',
-                          flex: 1
+                          flex: 1,
+                          fontSize: window.innerWidth <= 768 ? '12px' : '14px'
                         }}
                       >
                         Delete
@@ -955,7 +1240,7 @@ function AdminInterface() {
               }}>
                 {demos.length === 0 ? (
                   <>
-                    <p style={{ marginBottom: '20px' }}>No demos added yet. Create your first demo to showcase your AWS projects!</p>
+                    <p style={{ marginBottom: '20px', fontSize: window.innerWidth <= 768 ? '14px' : '16px' }}>No demos added yet. Create your first demo to showcase your AWS projects!</p>
                     <button 
                       onClick={() => setIsFormOpen(true)}
                       style={{ 
@@ -964,7 +1249,8 @@ function AdminInterface() {
                         padding: '10px 16px',
                         border: 'none',
                         borderRadius: '4px',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        fontSize: window.innerWidth <= 768 ? '14px' : '16px'
                       }}
                     >
                       Add Your First Demo
@@ -972,10 +1258,10 @@ function AdminInterface() {
                   </>
                 ) : (
                   <>
-                    <p style={{ marginBottom: '20px' }}>
+                    <p style={{ marginBottom: '20px', fontSize: window.innerWidth <= 768 ? '14px' : '16px' }}>
                       No projects match your current filters.
                     </p>
-                    <p style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px' }}>
+                    <p style={{ marginBottom: '20px', color: '#ddd', fontSize: window.innerWidth <= 768 ? '12px' : '14px' }}>
                       {searchTerm && `Search: "${searchTerm}"`}
                       {searchTerm && selectedFilterTags.length > 0 && ' • '}
                       {selectedFilterTags.length > 0 && `${selectedFilterTags.length} tag filter(s) active`}
@@ -988,7 +1274,8 @@ function AdminInterface() {
                         padding: '10px 16px',
                         border: 'none',
                         borderRadius: '4px',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        fontSize: window.innerWidth <= 768 ? '14px' : '16px'
                       }}
                     >
                       Clear All Filters

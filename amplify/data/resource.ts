@@ -23,6 +23,7 @@ const schema = a.schema({
   Tag: a
     .model({
       name: a.string().required(),
+      color: a.string().required(), // Added color field for tag colors
       demos: a.hasMany('DemoTag', 'tagId')
     })
     .authorization((allow) => [allow.publicApiKey()]),
