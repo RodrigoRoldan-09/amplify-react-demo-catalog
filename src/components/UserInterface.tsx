@@ -78,11 +78,14 @@ function UserInterface() {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
 
-  // Load tags
+  // Load tags - Enhanced with better error handling
   const loadTags = async () => {
     try {
+      console.log("Attempting to load tags manually...");
       // Fetch all tags
       const allTagsResponse = await client.models.Tag.list({});
+      console.log("Tag list response:", allTagsResponse);
+      
       if (allTagsResponse.data) {
         const tagData = allTagsResponse.data.map(tag => ({
           id: tag.id,
@@ -90,11 +93,15 @@ function UserInterface() {
           color: tag.color || "#f89520"
         }));
         setAvailableTags(tagData);
-        console.log("Tags loaded in user interface:", tagData);
+        console.log("Tags loaded manually:", tagData);
+      } else {
+        console.log("No tag data received");
+        setAvailableTags([]);
       }
     } catch (error) {
       const typedError = error as AppError;
-      console.error("Error loading tags:", typedError.message);
+      console.error("Error loading tags manually:", typedError.message);
+      setAvailableTags([]);
     }
   };
 
@@ -107,9 +114,6 @@ function UserInterface() {
     // See if Demo model exists
     if (availableModels.includes("Demo") && availableModels.includes("Tag")) {
       console.log("Both Demo and Tag models exist, setting up subscriptions...");
-      
-      // Load tags first
-      loadTags();
       
       // Set up subscription to Demo model
       try {
@@ -126,6 +130,7 @@ function UserInterface() {
               updatedAt: item.updatedAt
             }));
             setDemos(typedItems);
+            console.log("Demos loaded:", typedItems.length);
             setIsLoading(false);
           },
           error: (err: AppError) => {
@@ -135,26 +140,31 @@ function UserInterface() {
           }
         });
 
-        // Set up subscription to Tag model
+        // Set up subscription to Tag model - SIMPLIFIED
         const tagSubscription = client.models.Tag.observeQuery({}).subscribe({
           next: (data: TagSubscriptionData) => {
+            console.log("Raw tag data received:", data);
             const tagData = data.items.map(tag => ({
               id: tag.id,
               name: tag.name || "",
               color: tag.color || "#f89520"
             }));
+            console.log("Processed tag data:", tagData);
             setAvailableTags(tagData);
-            console.log("Tags updated via subscription:", tagData);
           },
           error: (err: AppError) => {
             const typedError = err as AppError;
             console.error("Error in Tag subscription:", typedError.message);
+            // Fallback: try to load tags manually
+            loadTags();
           }
         });
 
         // Set up subscription to DemoTag relationships
         const demoTagSubscription = client.models.DemoTag.observeQuery({}).subscribe({
           next: async (data: DemoTagSubscriptionData) => {
+            console.log("DemoTag relationships received:", data.items.length);
+            
             // Fetch tag details for each relationship
             const enrichedDemoTags: DemoTagItem[] = [];
             for (const item of data.items) {
@@ -177,12 +187,16 @@ function UserInterface() {
               }
             }
             setDemoTags(enrichedDemoTags);
+            console.log("Demo-Tag relationships processed:", enrichedDemoTags.length);
           },
           error: (err: AppError) => {
             const typedError = err as AppError;
             console.error("Error in DemoTag subscription:", typedError.message);
           }
         });
+
+        // Also try to load tags manually as backup
+        loadTags();
         
         return () => {
           demoSubscription.unsubscribe();
@@ -193,6 +207,8 @@ function UserInterface() {
         const typedError = error as AppError;
         console.error("Error setting up subscriptions:", typedError.message);
         setIsLoading(false);
+        // Fallback: load tags manually
+        loadTags();
       }
     } else {
       console.error("Demo or Tag models don't exist yet!");
