@@ -89,7 +89,7 @@ function AdminInterface() {
   // State for demos and tags
   const [demos, setDemos] = useState<DemoItem[]>([]);
   const [demoTags, setDemoTags] = useState<DemoTagItem[]>([]);
-  const [availableTags, setAvaileTags] = useState<TagItem[]>([]);
+  const [availableTags, setAvailableTags] = useState<TagItem[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
@@ -152,7 +152,7 @@ function AdminInterface() {
       // Fetch all tags
       const allTagsResponse = await client.models.Tag.list({});
       if (allTagsResponse.data) {
-        setAvaileTags(allTagsResponse.data.map(tag => ({
+        setAvailableTags(allTagsResponse.data.map(tag => ({
           id: tag.id,
           name: tag.name || "",
           color: tag.color || TAG_COLORS[0]
@@ -183,18 +183,29 @@ function AdminInterface() {
 
     try {
       const nextColor = getNextAvailableColor();
-      await client.models.Tag.create({ 
+      const newTag = await client.models.Tag.create({ 
         name: newTagName.trim(), 
         color: nextColor 
       });
       
+      setDebugInfo(prev => prev + `\nNew tag "${newTagName.trim()}" created with ID: ${newTag.data?.id}`);
+      
+      // Manually add the new tag to the list immediately for better UX
+      if (newTag.data && newTag.data.id) {
+        setAvailableTags(prev => [...prev, {
+          id: newTag.data!.id,
+          name: newTag.data!.name || "",
+          color: newTag.data!.color || nextColor
+        }]);
+      }
+      
       setNewTagName("");
       setIsAddTagOpen(false);
       setAddTagError(false);
-      setDebugInfo(prev => prev + `\nNew tag "${newTagName.trim()}" created`);
     } catch (error) {
       const typedError = error as AppError;
       setDebugInfo(prev => prev + "\nError creating tag: " + typedError.message);
+      setAddTagError(true);
     }
   };
 
@@ -240,7 +251,8 @@ function AdminInterface() {
         // Set up subscription to Tag model
         const tagSubscription = client.models.Tag.observeQuery({}).subscribe({
           next: (data: TagSubscriptionData) => {
-            setAvaileTags(data.items.map(tag => ({
+            setDebugInfo(prev => prev + "\nTag data received: " + data.items.length + " tags");
+            setAvailableTags(data.items.map(tag => ({
               id: tag.id,
               name: tag.name || "",
               color: tag.color || TAG_COLORS[0]
@@ -1004,46 +1016,70 @@ function AdminInterface() {
                       Tags *
                     </label>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-                      {availableTags.map(tag => (
-                        <button
-                          key={tag.id}
-                          type="button"
-                          onClick={() => handleTagToggle(tag.id)}
-                          style={{
-                            padding: '6px 12px',
-                            borderRadius: '20px',
-                            border: 'none',
-                            cursor: 'pointer',
-                            backgroundColor: selectedTags.includes(tag.id) ? tag.color : '#444',
-                            color: 'white',
-                            fontSize: window.innerWidth <= 768 ? '12px' : '14px'
-                          }}
-                        >
-                          {tag.name}
-                        </button>
-                      ))}
-                      {/* Add Tag Button */}
-                      <button
-                        type="button"
-                        onClick={() => setIsAddTagOpen(true)}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '50%',
-                          border: '2px dashed #f89520',
-                          backgroundColor: 'transparent',
-                          color: '#f89520',
-                          cursor: 'pointer',
-                          fontSize: '18px',
-                          width: '35px',
-                          height: '35px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                        title="Add new tag"
-                      >
-                        +
-                      </button>
+                      {availableTags.length > 0 ? (
+                        <>
+                          {availableTags.map(tag => (
+                            <button
+                              key={tag.id}
+                              type="button"
+                              onClick={() => handleTagToggle(tag.id)}
+                              style={{
+                                padding: '6px 12px',
+                                borderRadius: '20px',
+                                border: 'none',
+                                cursor: 'pointer',
+                                backgroundColor: selectedTags.includes(tag.id) ? tag.color : '#444',
+                                color: 'white',
+                                fontSize: window.innerWidth <= 768 ? '12px' : '14px'
+                              }}
+                            >
+                              {tag.name}
+                            </button>
+                          ))}
+                          {/* Add Tag Button */}
+                          <button
+                            type="button"
+                            onClick={() => setIsAddTagOpen(true)}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '50%',
+                              border: '2px dashed #f89520',
+                              backgroundColor: 'transparent',
+                              color: '#f89520',
+                              cursor: 'pointer',
+                              fontSize: '18px',
+                              width: '35px',
+                              height: '35px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            title="Add new tag"
+                          >
+                            +
+                          </button>
+                        </>
+                      ) : (
+                        <div style={{ color: '#ddd', fontSize: '14px' }}>
+                          Loading tags... 
+                          <button
+                            type="button"
+                            onClick={() => setIsAddTagOpen(true)}
+                            style={{
+                              marginLeft: '10px',
+                              padding: '6px 12px',
+                              borderRadius: '4px',
+                              border: '1px solid #f89520',
+                              backgroundColor: 'transparent',
+                              color: '#f89520',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                          >
+                            Add Tag
+                          </button>
+                        </div>
+                      )}
                     </div>
                     {formErrors.tags && <span style={{ color: '#f44336', fontSize: '12px' }}>At least one tag is required</span>}
                   </div>
