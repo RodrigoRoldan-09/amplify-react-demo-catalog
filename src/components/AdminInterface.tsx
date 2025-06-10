@@ -333,6 +333,7 @@ function AdminInterface() {
   }, []);
 
   // Test database function
+  /*
   function testDatabase() {
     setDebugInfo("Testing database...");
     const availableModels = Object.keys(client.models);
@@ -359,7 +360,7 @@ function AdminInterface() {
     } else {
       setDebugInfo(prev => prev + "\nNo Demo model found to test!");
     }
-  }
+  } */
 
   function validateForm() {
     const errors = {
@@ -674,9 +675,7 @@ function AdminInterface() {
             + Add Project
           </button>
         </header>
-        
-        {/* Debug panel */}
-        <div style={{ 
+        {/* Debug panel <div style={{ 
           border: '1px solid #333', 
           padding: '10px', 
           margin: '10px 0', 
@@ -699,7 +698,8 @@ function AdminInterface() {
             Test Database
           </button>
           <div style={{ marginTop: '10px', fontSize: '12px' }}>{debugInfo}</div>
-        </div>
+        </div> */}
+        
         
         {!modelExists && (
           <div style={{ 
