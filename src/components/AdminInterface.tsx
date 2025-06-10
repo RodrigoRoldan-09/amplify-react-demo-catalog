@@ -697,10 +697,10 @@ function AdminInterface() {
           }}>
             Test Database
           </button>
-          <div style={{ marginTop: '10px', fontSize: '12px' }}>{debugInfo}</div>
+         
         </div> */}
         
-        
+         <div style={{ marginTop: '10px', fontSize: '12px' }}>{debugInfo}</div>
         {!modelExists && (
           <div style={{ 
             border: '1px solid #d32f2f', 
