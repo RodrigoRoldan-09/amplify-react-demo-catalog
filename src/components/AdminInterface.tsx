@@ -1147,7 +1147,7 @@ function AdminInterface() {
               gridTemplateColumns: window.innerWidth <= 768 ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
               gap: '20px'
             }}>
-              {getFilteredDemos().map((demo, index) => (
+              {getFilteredDemos().map((demo) => (
                 <div key={demo.id} style={{ 
                   backgroundColor: '#222',
                   borderRadius: '8px',
@@ -1181,7 +1181,7 @@ function AdminInterface() {
                       marginTop: 0,
                       marginBottom: '12px'
                     }}>
-                      Demo {index + 1} - {demo.projectName || "Unnamed Project"}
+                      {demo.projectName || "Unnamed Project"}
                     </h3>
                     
                     {/* Display Tags */}
