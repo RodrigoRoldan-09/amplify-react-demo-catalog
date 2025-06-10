@@ -192,7 +192,7 @@ function AdminInterface() {
         color: nextColor 
       });
       
-      setDebugInfo(prev => prev + `\nNew tag "${newTagName.trim()}" created with ID: ${newTag.data?.id}`);
+      //setDebugInfo(prev => prev + `\nNew tag "${newTagName.trim()}" created with ID: ${newTag.data?.id}`);
       
       // Manually add the new tag to the list immediately for better UX
       if (newTag.data && newTag.data.id) {
