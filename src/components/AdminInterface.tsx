@@ -82,7 +82,7 @@ const TAG_COLORS = [
 
 function AdminInterface() {
   // Debug state to see what's happening
-  const [debugInfo, setDebugInfo] = useState<string>("Initializing...");
+  const [debugInfo, setDebugInfo] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [modelExists, setModelExists] = useState(false);
   
@@ -160,7 +160,7 @@ function AdminInterface() {
             color: tag.color || TAG_COLORS[0]
           }));
         setAvailableTags(validTags);
-        setDebugInfo(prev => prev + `\nLoaded ${validTags.length} valid tags`);
+        //setDebugInfo(prev => prev + `\nLoaded ${validTags.length} valid tags`);
       }
     } catch (error) {
       const typedError = error as AppError;
@@ -215,13 +215,13 @@ function AdminInterface() {
 
   // Check which models are available and set up subscriptions
   useEffect(() => {
-    setDebugInfo("Checking available models...");
+    //setDebugInfo("Checking available models...");
     const availableModels = Object.keys(client.models);
-    setDebugInfo(prev => prev + "\nAvailable models: " + availableModels.join(", "));
+    //setDebugInfo(prev => prev + "\nAvailable models: " + availableModels.join(", "));
     
     // See if Demo model exists
     if (availableModels.includes("Demo") && availableModels.includes("Tag")) {
-      setDebugInfo(prev => prev + "\nDemo and Tag models exist!");
+      //setDebugInfo(prev => prev + "\nDemo and Tag models exist!");
       setModelExists(true);
       
       // Initialize tags first
@@ -231,7 +231,7 @@ function AdminInterface() {
       try {
         const demoSubscription = client.models.Demo.observeQuery({}).subscribe({
           next: (data: SubscriptionData) => {
-            setDebugInfo(prev => prev + "\nDemo data received: " + data.items.length + " items");
+            //setDebugInfo(prev => prev + "\nDemo data received: " + data.items.length + " items");
             // Convert items to match our DemoItem type
             const typedItems: DemoItem[] = data.items.map((item: SubscriptionData['items'][0]) => ({
               id: item.id,
@@ -255,7 +255,7 @@ function AdminInterface() {
         // Set up subscription to Tag model
         const tagSubscription = client.models.Tag.observeQuery({}).subscribe({
           next: (data: TagSubscriptionData) => {
-            setDebugInfo(prev => prev + "\nTag data received: " + data.items.length + " tags");
+           // setDebugInfo(prev => prev + "\nTag data received: " + data.items.length + " tags");
             // Filter out null/invalid tags and add null safety
             const validTags = data.items
               .filter(tag => tag && tag.id && tag.name) // Only include valid tags
@@ -265,7 +265,7 @@ function AdminInterface() {
                 color: tag.color || TAG_COLORS[0]
               }));
             setAvailableTags(validTags);
-            setDebugInfo(prev => prev + `\nProcessed ${validTags.length} valid tags`);
+            //setDebugInfo(prev => prev + `\nProcessed ${validTags.length} valid tags`);
           },
           error: (err: AppError) => {
             const typedError = err as AppError;
@@ -276,7 +276,7 @@ function AdminInterface() {
         // Set up subscription to DemoTag relationships
         const demoTagSubscription = client.models.DemoTag.observeQuery({}).subscribe({
           next: async (data: DemoTagSubscriptionData) => {
-            setDebugInfo(prev => prev + "\nDemoTag data received: " + data.items.length + " relationships");
+            //setDebugInfo(prev => prev + "\nDemoTag data received: " + data.items.length + " relationships");
             
             // Fetch tag details for each relationship with null safety
             const enrichedDemoTags: DemoTagItem[] = [];
@@ -307,7 +307,7 @@ function AdminInterface() {
               }
             }
             setDemoTags(enrichedDemoTags);
-            setDebugInfo(prev => prev + `\nProcessed ${enrichedDemoTags.length} valid demo-tag relationships`);
+            //setDebugInfo(prev => prev + `\nProcessed ${enrichedDemoTags.length} valid demo-tag relationships`);
           },
           error: (err: AppError) => {
             const typedError = err as AppError;
