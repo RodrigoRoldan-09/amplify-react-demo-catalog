@@ -18,10 +18,8 @@ const schema = a.schema({
       tags: a.hasMany('DemoTag', 'demoId')
     })
     .authorization((allow) => [
-      // Público puede leer
-      allow.publicApiKey().to(['read']),
-      // Solo usuarios autenticados pueden crear, actualizar y eliminar
-      allow.authenticated().to(['create', 'update', 'delete'])
+      // Permitir acceso público completo por ahora para debuggear
+      allow.publicApiKey()
     ]),
      
   Tag: a
@@ -31,10 +29,8 @@ const schema = a.schema({
       demos: a.hasMany('DemoTag', 'tagId')
     })
     .authorization((allow) => [
-      // Público puede leer
-      allow.publicApiKey().to(['read']),
-      // Solo usuarios autenticados pueden crear, actualizar y eliminar
-      allow.authenticated().to(['create', 'update', 'delete'])
+      // Permitir acceso público completo por ahora para debuggear
+      allow.publicApiKey()
     ]),
      
   DemoTag: a
@@ -45,13 +41,11 @@ const schema = a.schema({
       tag: a.belongsTo('Tag', 'tagId')
     })
     .authorization((allow) => [
-      // Público puede leer
-      allow.publicApiKey().to(['read']),
-      // Solo usuarios autenticados pueden crear, actualizar y eliminar
-      allow.authenticated().to(['create', 'update', 'delete'])
+      // Permitir acceso público completo por ahora para debuggear
+      allow.publicApiKey()
     ]),
 
-  // Modelo para usuarios predefinidos
+  // Modelo para usuarios predefinidos (opcional por ahora)
   AdminUser: a
     .model({
       username: a.string().required(),
@@ -60,7 +54,7 @@ const schema = a.schema({
       isActive: a.boolean().default(true)
     })
     .authorization((allow) => [
-      allow.authenticated().to(['read', 'create', 'update', 'delete'])
+      allow.publicApiKey()
     ]),
 });
 

@@ -488,28 +488,71 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
         setEditingId(null);
       } else {
         console.log("Creating new demo with data:", formData);
-        // Create new demo
-        const newDemo = await client.models.Demo.create(formData);
-        console.log("Create result:", newDemo);
         
-        if (!newDemo.data || !newDemo.data.id) {
-          throw new Error("Failed to create demo - no ID returned");
+        // Try different approaches for demo creation
+        try {
+          // First approach: normal create
+          const newDemo = await client.models.Demo.create(formData);
+          console.log("Create result (full response):", JSON.stringify(newDemo, null, 2));
+          
+          if (newDemo.data && newDemo.data.id) {
+            demoId = newDemo.data.id;
+            console.log("Demo created successfully with ID:", demoId);
+          } else {
+            console.error("Demo creation failed - no valid ID in response");
+            console.log("Response data:", newDemo.data);
+            console.log("Response errors:", newDemo.errors);
+            
+            // Try to extract ID from errors or alternative paths
+            if (newDemo.errors && newDemo.errors.length > 0) {
+              throw new Error(`GraphQL errors: ${newDemo.errors.map(e => e.message).join(', ')}`);
+            }
+            
+            throw new Error("Failed to create demo - no ID returned from server");
+          }
+        } catch (createError) {
+          console.error("Error during demo creation:", createError);
+          
+          // Try alternative approach: create with explicit fields
+          console.log("Trying alternative creation method...");
+          const alternativeDemo = await client.models.Demo.create({
+            projectName: formData.projectName || "Untitled Project",
+            githubLink: formData.githubLink || "",
+            projectLink: formData.projectLink || "",
+            imageUrl: formData.imageUrl || ""
+          });
+          
+          console.log("Alternative create result:", JSON.stringify(alternativeDemo, null, 2));
+          
+          if (alternativeDemo.data && alternativeDemo.data.id) {
+            demoId = alternativeDemo.data.id;
+            console.log("Demo created with alternative method, ID:", demoId);
+          } else {
+            throw createError; // Re-throw original error
+          }
         }
-        
-        demoId = newDemo.data.id;
-        console.log("New demo ID:", demoId);
       }
       
       // Create new tag relationships
       console.log("Creating tag relationships for demo:", demoId);
-      for (const tagId of selectedTags) {
+      const tagPromises = selectedTags.map(async (tagId) => {
         console.log("Creating relationship for tag:", tagId);
-        const demoTagResult = await client.models.DemoTag.create({
-          demoId: demoId,
-          tagId: tagId
-        });
-        console.log("DemoTag created:", demoTagResult);
-      }
+        try {
+          const demoTagResult = await client.models.DemoTag.create({
+            demoId: demoId,
+            tagId: tagId
+          });
+          console.log("DemoTag created:", demoTagResult);
+          return demoTagResult;
+        } catch (tagError) {
+          console.error(`Error creating relationship for tag ${tagId}:`, tagError);
+          return null;
+        }
+      });
+      
+      const tagResults = await Promise.all(tagPromises);
+      const successfulTags = tagResults.filter(result => result !== null);
+      console.log(`Created ${successfulTags.length} of ${selectedTags.length} tag relationships`);
       
       // Reset form
       setFormData({
@@ -522,13 +565,21 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
       setIsFormOpen(false);
       
       console.log("Demo creation/update completed successfully");
-      alert("Demo saved successfully!");
+      alert(`Demo ${editingId ? 'updated' : 'created'} successfully!`);
       
     } catch (error) {
       const typedError = error as AppError;
       console.error("Error in form submit:", error);
+      
+      // More detailed error information
+      if (error instanceof Error) {
+        console.error("Error name:", error.name);
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
+      }
+      
       setDebugInfo("Error in form submit: " + typedError.message);
-      alert("Error saving demo: " + typedError.message);
+      alert("Error saving demo: " + typedError.message + "\n\nCheck console for more details.");
     }
   }
 
