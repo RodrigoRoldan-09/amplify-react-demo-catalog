@@ -55,6 +55,15 @@ function App() {
     localStorage.removeItem('demo_catalog_user');
   };
 
+  // Funciones separadas para manejar cambios en inputs
+  const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLoginData(prev => ({ ...prev, username: e.target.value }));
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLoginData(prev => ({ ...prev, password: e.target.value }));
+  };
+
   if (isLoading) {
     return (
       <div style={{
@@ -89,8 +98,11 @@ function App() {
         maxWidth: '400px'
       }}>
         <h1 style={{ color: '#f89520', textAlign: 'center', marginBottom: '30px' }}>
-          Demo Catalog - Admin
+          Demo Catalog
         </h1>
+        <p style={{ color: '#ddd', textAlign: 'center', marginBottom: '30px' }}>
+          Acceso de Administrador
+        </p>
         
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: '20px' }}>
@@ -100,7 +112,7 @@ function App() {
             <input
               type="text"
               value={loginData.username}
-              onChange={(e) => setLoginData(prev => ({ ...prev, username: e.target.value }))}
+              onChange={handleUsernameChange}
               style={{
                 width: '100%',
                 padding: '12px',
@@ -110,7 +122,7 @@ function App() {
                 borderRadius: '4px',
                 boxSizing: 'border-box'
               }}
-              placeholder="rodes o reno"
+              placeholder="Ingresa tu usuario"
               required
             />
           </div>
@@ -122,7 +134,7 @@ function App() {
             <input
               type="password"
               value={loginData.password}
-              onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
+              onChange={handlePasswordChange}
               style={{
                 width: '100%',
                 padding: '12px',
@@ -132,6 +144,7 @@ function App() {
                 borderRadius: '4px',
                 boxSizing: 'border-box'
               }}
+              placeholder="Ingresa tu contraseña"
               required
             />
           </div>
@@ -166,27 +179,7 @@ function App() {
           </button>
         </form>
 
-        <div style={{
-          marginTop: '30px',
-          padding: '15px',
-          backgroundColor: '#1a1a1a',
-          borderRadius: '4px',
-          border: '1px solid #444'
-        }}>
-          <h4 style={{ color: '#f89520', margin: '0 0 10px 0' }}>
-            Usuarios de Prueba:
-          </h4>
-          <div style={{ color: '#ddd', fontSize: '14px' }}>
-            <p style={{ margin: '5px 0' }}>
-              <strong>Usuario 1:</strong> rodes / remr020605
-            </p>
-            <p style={{ margin: '5px 0' }}>
-              <strong>Usuario 2:</strong> reno / !Reno1990.
-            </p>
-          </div>
-        </div>
-
-        <div style={{ textAlign: 'center', marginTop: '20px' }}>
+        <div style={{ textAlign: 'center', marginTop: '30px' }}>
           <a href="/" style={{ color: '#2196f3', textDecoration: 'none' }}>
             ← Volver al catálogo público
           </a>
