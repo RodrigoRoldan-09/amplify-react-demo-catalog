@@ -1,4 +1,4 @@
-// AdminInterface.tsx - Responsive with Add Tag Feature and Color Support
+// AdminInterface.tsx - Responsive with Add Tag Feature and Color Support + Simple Auth
 import { useEffect, useState } from "react";
 import type { Schema } from "../../amplify/data/resource";
 import { generateClient } from "aws-amplify/data";
@@ -66,6 +66,12 @@ interface DemoTagSubscriptionData {
 // Define a type for errors
 type AppError = Error | { message: string };
 
+// Props interface
+interface AdminInterfaceProps {
+  currentUser: string;
+  onLogout: () => void;
+}
+
 // 10 predefined colors that work with orange-black theme
 const TAG_COLORS = [
   '#e74c3c', // Red
@@ -80,7 +86,7 @@ const TAG_COLORS = [
   '#8e44ad'  // Dark Purple
 ];
 
-function AdminInterface() {
+function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
   // Debug state to see what's happening
   const [debugInfo, setDebugInfo] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
@@ -160,7 +166,6 @@ function AdminInterface() {
             color: tag.color || TAG_COLORS[0]
           }));
         setAvailableTags(validTags);
-        //setDebugInfo(prev => prev + `\nLoaded ${validTags.length} valid tags`);
       }
     } catch (error) {
       const typedError = error as AppError;
@@ -192,8 +197,6 @@ function AdminInterface() {
         color: nextColor 
       });
       
-      //setDebugInfo(prev => prev + `\nNew tag "${newTagName.trim()}" created with ID: ${newTag.data?.id}`);
-      
       // Manually add the new tag to the list immediately for better UX
       if (newTag.data && newTag.data.id) {
         setAvailableTags(prev => [...prev, {
@@ -215,13 +218,10 @@ function AdminInterface() {
 
   // Check which models are available and set up subscriptions
   useEffect(() => {
-    //setDebugInfo("Checking available models...");
     const availableModels = Object.keys(client.models);
-    //setDebugInfo(prev => prev + "\nAvailable models: " + availableModels.join(", "));
     
     // See if Demo model exists
     if (availableModels.includes("Demo") && availableModels.includes("Tag")) {
-      //setDebugInfo(prev => prev + "\nDemo and Tag models exist!");
       setModelExists(true);
       
       // Initialize tags first
@@ -231,7 +231,6 @@ function AdminInterface() {
       try {
         const demoSubscription = client.models.Demo.observeQuery({}).subscribe({
           next: (data: SubscriptionData) => {
-            //setDebugInfo(prev => prev + "\nDemo data received: " + data.items.length + " items");
             // Convert items to match our DemoItem type
             const typedItems: DemoItem[] = data.items.map((item: SubscriptionData['items'][0]) => ({
               id: item.id,
@@ -255,7 +254,6 @@ function AdminInterface() {
         // Set up subscription to Tag model
         const tagSubscription = client.models.Tag.observeQuery({}).subscribe({
           next: (data: TagSubscriptionData) => {
-           // setDebugInfo(prev => prev + "\nTag data received: " + data.items.length + " tags");
             // Filter out null/invalid tags and add null safety
             const validTags = data.items
               .filter(tag => tag && tag.id && tag.name) // Only include valid tags
@@ -265,7 +263,6 @@ function AdminInterface() {
                 color: tag.color || TAG_COLORS[0]
               }));
             setAvailableTags(validTags);
-            //setDebugInfo(prev => prev + `\nProcessed ${validTags.length} valid tags`);
           },
           error: (err: AppError) => {
             const typedError = err as AppError;
@@ -276,8 +273,6 @@ function AdminInterface() {
         // Set up subscription to DemoTag relationships
         const demoTagSubscription = client.models.DemoTag.observeQuery({}).subscribe({
           next: async (data: DemoTagSubscriptionData) => {
-            //setDebugInfo(prev => prev + "\nDemoTag data received: " + data.items.length + " relationships");
-            
             // Fetch tag details for each relationship with null safety
             const enrichedDemoTags: DemoTagItem[] = [];
             for (const item of data.items) {
@@ -307,7 +302,6 @@ function AdminInterface() {
               }
             }
             setDemoTags(enrichedDemoTags);
-            //setDebugInfo(prev => prev + `\nProcessed ${enrichedDemoTags.length} valid demo-tag relationships`);
           },
           error: (err: AppError) => {
             const typedError = err as AppError;
@@ -331,36 +325,6 @@ function AdminInterface() {
       setIsLoading(false);
     }
   }, []);
-
-  // Test database function
-  /*
-  function testDatabase() {
-    setDebugInfo("Testing database...");
-    const availableModels = Object.keys(client.models);
-    setDebugInfo(prev => prev + "\nAvailable models: " + availableModels.join(", "));
-    
-    if (availableModels.includes("Demo")) {
-      // Test creating a Demo
-      try {
-        client.models.Demo.create({
-          projectName: "Test Project",
-          githubLink: "https://github.com/test/project",
-          projectLink: "https://test-project.example.com",
-          imageUrl: "https://via.placeholder.com/400x200?text=Test+Project"
-        }).then(() => {
-          setDebugInfo(prev => prev + "\nDemo created successfully!");
-        }).catch((err) => {
-          const typedError = err as AppError;
-          setDebugInfo(prev => prev + "\nFailed to create Demo: " + typedError.message);
-        });
-      } catch (error) {
-        const typedError = error as AppError;
-        setDebugInfo(prev => prev + "\nError testing database: " + typedError.message);
-      }
-    } else {
-      setDebugInfo(prev => prev + "\nNo Demo model found to test!");
-    }
-  } */
 
   function validateForm() {
     const errors = {
@@ -660,47 +624,57 @@ function AdminInterface() {
             </a>
           </div>
           
-          <button 
-            onClick={() => setIsFormOpen(true)} 
-            style={{
-              backgroundColor: '#f89520',
-              color: 'white',
-              padding: '10px 16px',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: window.innerWidth <= 768 ? '14px' : '16px'
-            }}
-          >
-            + Add Project
-          </button>
-        </header>
-        {/* Debug panel <div style={{ 
-          border: '1px solid #333', 
-          padding: '10px', 
-          margin: '10px 0', 
-          backgroundColor: '#222',
-          color: '#ddd',
-          borderRadius: '8px',
-          whiteSpace: 'pre-wrap',
-          fontSize: window.innerWidth <= 768 ? '12px' : '14px'
-        }}>
-          <h3 style={{ fontSize: window.innerWidth <= 768 ? '14px' : '16px' }}>Debug Info (Remove in production)</h3>
-          <button onClick={testDatabase} style={{ 
-            backgroundColor: '#f89520',
-            color: 'white',
-            padding: '6px 10px',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '12px'
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '10px',
+            flexWrap: 'wrap'
           }}>
-            Test Database
-          </button>
-         
-        </div> */}
+            {currentUser && (
+              <span style={{ 
+                color: '#ddd', 
+                fontSize: '14px',
+                padding: '8px 12px',
+                backgroundColor: '#333',
+                borderRadius: '4px'
+              }}>
+                👤 {currentUser}
+              </span>
+            )}
+            
+            <button 
+              onClick={() => setIsFormOpen(true)} 
+              style={{
+                backgroundColor: '#f89520',
+                color: 'white',
+                padding: '10px 16px',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: window.innerWidth <= 768 ? '14px' : '16px'
+              }}
+            >
+              + Add Project
+            </button>
+            
+            <button 
+              onClick={onLogout}
+              style={{
+                backgroundColor: '#e53935',
+                color: 'white',
+                padding: '10px 16px',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: window.innerWidth <= 768 ? '14px' : '16px'
+              }}
+            >
+              🚪 Logout
+            </button>
+          </div>
+        </header>
         
-         <div style={{ marginTop: '10px', fontSize: '12px' }}>{debugInfo}</div>
+        <div style={{ marginTop: '10px', fontSize: '12px' }}>{debugInfo}</div>
         {!modelExists && (
           <div style={{ 
             border: '1px solid #d32f2f', 
@@ -1345,4 +1319,3 @@ function AdminInterface() {
 }
 
 export default AdminInterface;
-//vdvnergwervewfew
