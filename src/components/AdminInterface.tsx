@@ -170,6 +170,7 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
     } catch (error) {
       const typedError = error as AppError;
       setDebugInfo(prev => prev + "\nError initializing tags: " + typedError.message);
+      console.error("Error initializing tags:", error);
     }
   };
 
@@ -197,6 +198,8 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
         color: nextColor 
       });
       
+      console.log("New tag created:", newTag);
+      
       // Manually add the new tag to the list immediately for better UX
       if (newTag.data && newTag.data.id) {
         setAvailableTags(prev => [...prev, {
@@ -212,16 +215,20 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
     } catch (error) {
       const typedError = error as AppError;
       setDebugInfo(prev => prev + "\nError creating tag: " + typedError.message);
+      console.error("Error creating tag:", error);
       setAddTagError(true);
     }
   };
 
   // Check which models are available and set up subscriptions
   useEffect(() => {
+    console.log("AdminInterface: Starting initialization...");
     const availableModels = Object.keys(client.models);
+    console.log("Available models:", availableModels);
     
     // See if Demo model exists
     if (availableModels.includes("Demo") && availableModels.includes("Tag")) {
+      console.log("Both Demo and Tag models exist, setting up subscriptions...");
       setModelExists(true);
       
       // Initialize tags first
@@ -231,6 +238,7 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
       try {
         const demoSubscription = client.models.Demo.observeQuery({}).subscribe({
           next: (data: SubscriptionData) => {
+            console.log("Demo data received:", data.items.length, "items");
             // Convert items to match our DemoItem type
             const typedItems: DemoItem[] = data.items.map((item: SubscriptionData['items'][0]) => ({
               id: item.id,
@@ -246,6 +254,7 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
           },
           error: (err: AppError) => {
             const typedError = err as AppError;
+            console.error("Error in Demo subscription:", typedError.message);
             setDebugInfo(prev => prev + "\nError in Demo subscription: " + typedError.message);
             setIsLoading(false);
           }
@@ -254,6 +263,7 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
         // Set up subscription to Tag model
         const tagSubscription = client.models.Tag.observeQuery({}).subscribe({
           next: (data: TagSubscriptionData) => {
+            console.log("Tag data received:", data.items.length, "items");
             // Filter out null/invalid tags and add null safety
             const validTags = data.items
               .filter(tag => tag && tag.id && tag.name) // Only include valid tags
@@ -266,6 +276,7 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
           },
           error: (err: AppError) => {
             const typedError = err as AppError;
+            console.error("Error in Tag subscription:", typedError.message);
             setDebugInfo(prev => prev + "\nError in Tag subscription: " + typedError.message);
           }
         });
@@ -273,11 +284,12 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
         // Set up subscription to DemoTag relationships
         const demoTagSubscription = client.models.DemoTag.observeQuery({}).subscribe({
           next: async (data: DemoTagSubscriptionData) => {
+            console.log("DemoTag data received:", data.items.length, "items");
             // Fetch tag details for each relationship with null safety
             const enrichedDemoTags: DemoTagItem[] = [];
             for (const item of data.items) {
               if (!item || !item.tagId || !item.demoId) {
-                setDebugInfo(prev => prev + "\nSkipping invalid DemoTag item");
+                console.log("Skipping invalid DemoTag item:", item);
                 continue;
               }
               
@@ -295,16 +307,17 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
                     }
                   });
                 } else {
-                  setDebugInfo(prev => prev + `\nTag ${item.tagId} not found or invalid`);
+                  console.log(`Tag ${item.tagId} not found or invalid`);
                 }
               } catch (error) {
-                setDebugInfo(prev => prev + `\nError fetching tag ${item.tagId}: ${error}`);
+                console.error(`Error fetching tag ${item.tagId}:`, error);
               }
             }
             setDemoTags(enrichedDemoTags);
           },
           error: (err: AppError) => {
             const typedError = err as AppError;
+            console.error("Error in DemoTag subscription:", typedError.message);
             setDebugInfo(prev => prev + "\nError in DemoTag subscription: " + typedError.message);
           }
         });
@@ -316,10 +329,12 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
         };
       } catch (error) {
         const typedError = error as AppError;
+        console.error("Error setting up subscriptions:", typedError.message);
         setDebugInfo(prev => prev + "\nError setting up Demo subscription: " + typedError.message);
         setIsLoading(false);
       }
     } else {
+      console.error("Demo or Tag models don't exist yet!");
       setDebugInfo(prev => prev + "\nDemo or Tag models don't exist yet!");
       setModelExists(false);
       setIsLoading(false);
@@ -360,8 +375,10 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
         
         // Then delete the demo
         await client.models.Demo.delete({ id });
+        console.log("Demo deleted successfully");
       } catch (error) {
         const typedError = error as AppError;
+        console.error("Error deleting demo:", error);
         setDebugInfo("Error deleting demo: " + typedError.message);
       }
     }
@@ -427,12 +444,20 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     
+    console.log("Form submitted with data:", formData);
+    console.log("Selected tags:", selectedTags);
+    console.log("Model exists:", modelExists);
+    
     if (!modelExists) {
-      setDebugInfo("Cannot submit: Demo model is not available in the backend yet.");
+      const errorMsg = "Cannot submit: Demo model is not available in the backend yet.";
+      setDebugInfo(errorMsg);
+      console.error(errorMsg);
+      alert(errorMsg);
       return;
     }
     
     if (!validateForm()) {
+      console.log("Form validation failed");
       return;
     }
     
@@ -440,11 +465,13 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
       let demoId: string;
       
       if (editingId) {
+        console.log("Updating existing demo:", editingId);
         // Update existing demo
-        await client.models.Demo.update({
+        const updateResult = await client.models.Demo.update({
           id: editingId,
           ...formData
         });
+        console.log("Update result:", updateResult);
         demoId = editingId;
         
         // Delete existing tag relationships
@@ -460,17 +487,28 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
         
         setEditingId(null);
       } else {
+        console.log("Creating new demo with data:", formData);
         // Create new demo
         const newDemo = await client.models.Demo.create(formData);
-        demoId = newDemo.data?.id || "";
+        console.log("Create result:", newDemo);
+        
+        if (!newDemo.data || !newDemo.data.id) {
+          throw new Error("Failed to create demo - no ID returned");
+        }
+        
+        demoId = newDemo.data.id;
+        console.log("New demo ID:", demoId);
       }
       
       // Create new tag relationships
+      console.log("Creating tag relationships for demo:", demoId);
       for (const tagId of selectedTags) {
-        await client.models.DemoTag.create({
+        console.log("Creating relationship for tag:", tagId);
+        const demoTagResult = await client.models.DemoTag.create({
           demoId: demoId,
           tagId: tagId
         });
+        console.log("DemoTag created:", demoTagResult);
       }
       
       // Reset form
@@ -482,9 +520,15 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
       });
       setSelectedTags([]);
       setIsFormOpen(false);
+      
+      console.log("Demo creation/update completed successfully");
+      alert("Demo saved successfully!");
+      
     } catch (error) {
       const typedError = error as AppError;
+      console.error("Error in form submit:", error);
       setDebugInfo("Error in form submit: " + typedError.message);
+      alert("Error saving demo: " + typedError.message);
     }
   }
 
@@ -674,7 +718,25 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
           </div>
         </header>
         
-        <div style={{ marginTop: '10px', fontSize: '12px' }}>{debugInfo}</div>
+        {/* Debug panel - mostrar temporalmente para diagnosticar */}
+        <div style={{ 
+          border: '1px solid #333', 
+          padding: '10px', 
+          margin: '10px 0', 
+          backgroundColor: '#222',
+          color: '#ddd',
+          borderRadius: '8px',
+          whiteSpace: 'pre-wrap',
+          fontSize: window.innerWidth <= 768 ? '12px' : '14px'
+        }}>
+          <h3 style={{ fontSize: window.innerWidth <= 768 ? '14px' : '16px' }}>Debug Info:</h3>
+          <div>Model exists: {modelExists ? 'YES' : 'NO'}</div>
+          <div>Demos count: {demos.length}</div>
+          <div>Tags count: {availableTags.length}</div>
+          <div>Form open: {isFormOpen ? 'YES' : 'NO'}</div>
+          {debugInfo && <div style={{ marginTop: '10px', fontSize: '12px' }}>{debugInfo}</div>}
+        </div>
+        
         {!modelExists && (
           <div style={{ 
             border: '1px solid #d32f2f', 
