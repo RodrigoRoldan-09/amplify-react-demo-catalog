@@ -5,33 +5,33 @@ import AdminInterface from './AdminInterface';
 // Extendemos AuthUser para incluir atributos
 interface ExtendedAuthUser extends AuthUser {
   attributes?: {
-    username?: string;
+    email?: string;
     name?: string;
     [key: string]: string | undefined;
   };
 }
 
-// Tema personalizado (modo oscuro + botón naranja + texto blanco)
+// 🎨 Tema personalizado (modo oscuro + naranja + texto blanco)
 const theme = {
   name: 'admin-dark-orange',
   tokens: {
     colors: {
       font: {
-        primary: { value: '#ffffff' }  // texto blanco
+        primary: { value: '#ffffff' }
       },
       brand: {
         primary: {
           10: { value: '#fff8f0' },
           20: { value: '#ffe4cc' },
           40: { value: '#ffb366' },
-          60: { value: '#f89520' }, // botón principal
+          60: { value: '#f89520' },
           80: { value: '#e67e00' },
           90: { value: '#cc6f00' },
           100: { value: '#b35f00' }
         }
       },
       background: {
-        primary: { value: '#121212' },  // fondo del auth
+        primary: { value: '#121212' },
         secondary: { value: '#222222' }
       },
       neutral: {
@@ -47,12 +47,12 @@ const theme = {
   }
 };
 
-// Traducciones personalizadas (usuario y contraseña)
+// 🌐 Traducciones para email y password
 const formFields = {
   signIn: {
-    username: {
-      label: 'Usuario',
-      placeholder: 'Ingresa tu usuario'
+    email: {
+      label: 'Correo electrónico',
+      placeholder: 'Ingresa tu correo'
     },
     password: {
       label: 'Contraseña',
@@ -61,7 +61,7 @@ const formFields = {
   }
 };
 
-// Header y Footer
+// 🧩 Header y Footer
 const components = {
   Header() {
     return (
@@ -107,15 +107,16 @@ const components = {
   }
 };
 
-// Componente autenticado
+// 👤 Componente autenticado (admin interface)
 function AuthenticatedAdmin() {
   const { user, signOut } = useAuthenticator();
   const extendedUser = user as ExtendedAuthUser;
-  const currentUser = extendedUser?.username || extendedUser?.attributes?.username || 'Usuario';
+  const currentUser = extendedUser?.attributes?.email || extendedUser?.username || 'Usuario';
 
   const handleLogout = async () => {
     try {
       await signOut();
+      window.location.href = '/'; // Opcional: redirige al salir
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
     }
@@ -124,7 +125,7 @@ function AuthenticatedAdmin() {
   return <AdminInterface currentUser={currentUser} onLogout={handleLogout} />;
 }
 
-// Componente principal
+// 🚪 Componente principal con Authenticator
 function AdminRoute() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#121212' }}>
@@ -133,7 +134,7 @@ function AdminRoute() {
           formFields={formFields}
           components={components}
           hideSignUp={true}
-          loginMechanisms={['username']} // <- ¡clave!
+          loginMechanisms={['email']} // 💥 CAMBIADO para usar email como login
         >
           <AuthenticatedAdmin />
         </Authenticator>
