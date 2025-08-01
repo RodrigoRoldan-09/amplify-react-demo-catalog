@@ -733,7 +733,7 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
                 backgroundColor: '#333',
                 borderRadius: '4px'
               }}>
-                👤 {currentUser}
+                👤 {'Administrator Access'}
               </span>
             )}
             
@@ -769,7 +769,8 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
           </div>
         </header>
         
-        {/* Debug panel - mostrar temporalmente para diagnosticar */}
+        {/* Debug panel - commented out for production */}
+        {/*
         <div style={{ 
           border: '1px solid #333', 
           padding: '10px', 
@@ -787,6 +788,8 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
           <div>Form open: {isFormOpen ? 'YES' : 'NO'}</div>
           {debugInfo && <div style={{ marginTop: '10px', fontSize: '12px' }}>{debugInfo}</div>}
         </div>
+        */}
+        
         
         {!modelExists && (
           <div style={{ 

@@ -11,7 +11,7 @@ interface ExtendedAuthUser extends AuthUser {
   };
 }
 
-// 🎨 Tema personalizado (modo oscuro + naranja + texto blanco)
+// Tema personalizado (modo oscuro + naranja + texto blanco)
 const theme = {
   name: 'admin-dark-orange',
   tokens: {
@@ -47,21 +47,17 @@ const theme = {
   }
 };
 
-// 🌐 Traducciones para email y password
+// Campos del formulario personalizados
 const formFields = {
   signIn: {
-    email: {
-      label: 'Correo electrónico',
-      placeholder: 'Ingresa tu correo'
-    },
     password: {
-      label: 'Contraseña',
-      placeholder: 'Ingresa tu contraseña'
+      label: 'Password',
+      placeholder: 'Type your Password'
     }
   }
 };
 
-// 🧩 Header y Footer
+// Header, Footer y botón personalizado
 const components = {
   Header() {
     return (
@@ -81,7 +77,7 @@ const components = {
           color: '#ddd',
           margin: 0
         }}>
-          Acceso de Administrador
+          Administrator Access
         </p>
       </div>
     );
@@ -100,14 +96,15 @@ const components = {
             textDecoration: 'none'
           }}
         >
-          ← Volver al catálogo público
+          ← Return to the Public Catalog
         </a>
       </div>
     );
   }
 };
 
-// 👤 Componente autenticado (admin interface)
+
+// Componente autenticado
 function AuthenticatedAdmin() {
   const { user, signOut } = useAuthenticator();
   const extendedUser = user as ExtendedAuthUser;
@@ -116,7 +113,7 @@ function AuthenticatedAdmin() {
   const handleLogout = async () => {
     try {
       await signOut();
-      window.location.href = '/'; // Opcional: redirige al salir
+      window.location.href = '/'; // Redirige al salir
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
     }
@@ -125,7 +122,7 @@ function AuthenticatedAdmin() {
   return <AdminInterface currentUser={currentUser} onLogout={handleLogout} />;
 }
 
-// 🚪 Componente principal con Authenticator
+// Componente principal
 function AdminRoute() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#121212' }}>
@@ -134,7 +131,7 @@ function AdminRoute() {
           formFields={formFields}
           components={components}
           hideSignUp={true}
-          loginMechanisms={['email']} // 💥 CAMBIADO para usar email como login
+          loginMechanisms={['email']} // Solo login por correo
         >
           <AuthenticatedAdmin />
         </Authenticator>
