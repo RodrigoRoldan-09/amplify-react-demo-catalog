@@ -88,7 +88,7 @@ const TAG_COLORS = [
 
 function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
   // Debug state to see what's happening
-  const [debugInfo, setDebugInfo] = useState<string>("");
+  //const [debugInfo, setDebugInfo] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [modelExists, setModelExists] = useState(false);
   
@@ -152,7 +152,7 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
         for (const tag of predefinedTags) {
           await client.models.Tag.create({ name: tag.name, color: tag.color });
         }
-        setDebugInfo(prev => prev + "\nPredefined tags created");
+        //setDebugInfo(prev => prev + "\nPredefined tags created");
       }
       
       // Fetch all tags with null safety
@@ -168,9 +168,9 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
         setAvailableTags(validTags);
       }
     } catch (error) {
-      const typedError = error as AppError;
-      setDebugInfo(prev => prev + "\nError initializing tags: " + typedError.message);
-      console.error("Error initializing tags:", error);
+      //const typedError = error as AppError;
+      //setDebugInfo(prev => prev + "\nError initializing tags: " + typedError.message);
+      //console.error("Error initializing tags:", error);
     }
   };
 
@@ -213,9 +213,9 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
       setIsAddTagOpen(false);
       setAddTagError(false);
     } catch (error) {
-      const typedError = error as AppError;
-      setDebugInfo(prev => prev + "\nError creating tag: " + typedError.message);
-      console.error("Error creating tag:", error);
+      //const typedError = error as AppError;
+      //setDebugInfo(prev => prev + "\nError creating tag: " + typedError.message);
+      //console.error("Error creating tag:", error);
       setAddTagError(true);
     }
   };
@@ -255,7 +255,7 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
           error: (err: AppError) => {
             const typedError = err as AppError;
             console.error("Error in Demo subscription:", typedError.message);
-            setDebugInfo(prev => prev + "\nError in Demo subscription: " + typedError.message);
+            //setDebugInfo(prev => prev + "\nError in Demo subscription: " + typedError.message);
             setIsLoading(false);
           }
         });
@@ -277,7 +277,7 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
           error: (err: AppError) => {
             const typedError = err as AppError;
             console.error("Error in Tag subscription:", typedError.message);
-            setDebugInfo(prev => prev + "\nError in Tag subscription: " + typedError.message);
+            //setDebugInfo(prev => prev + "\nError in Tag subscription: " + typedError.message);
           }
         });
 
@@ -318,7 +318,7 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
           error: (err: AppError) => {
             const typedError = err as AppError;
             console.error("Error in DemoTag subscription:", typedError.message);
-            setDebugInfo(prev => prev + "\nError in DemoTag subscription: " + typedError.message);
+            //setDebugInfo(prev => prev + "\nError in DemoTag subscription: " + typedError.message);
           }
         });
         
@@ -330,12 +330,12 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
       } catch (error) {
         const typedError = error as AppError;
         console.error("Error setting up subscriptions:", typedError.message);
-        setDebugInfo(prev => prev + "\nError setting up Demo subscription: " + typedError.message);
+       // setDebugInfo(prev => prev + "\nError setting up Demo subscription: " + typedError.message);
         setIsLoading(false);
       }
     } else {
       console.error("Demo or Tag models don't exist yet!");
-      setDebugInfo(prev => prev + "\nDemo or Tag models don't exist yet!");
+      //setDebugInfo(prev => prev + "\nDemo or Tag models don't exist yet!");
       setModelExists(false);
       setIsLoading(false);
     }
@@ -356,7 +356,7 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
   
   async function deleteDemo(id: string) {
     if (!modelExists) {
-      setDebugInfo("Cannot delete: Demo model is not available in the backend yet.");
+      //setDebugInfo("Cannot delete: Demo model is not available in the backend yet.");
       return;
     }
     
@@ -377,9 +377,9 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
         await client.models.Demo.delete({ id });
         console.log("Demo deleted successfully");
       } catch (error) {
-        const typedError = error as AppError;
+       //const typedError = error as AppError;
         console.error("Error deleting demo:", error);
-        setDebugInfo("Error deleting demo: " + typedError.message);
+        //setDebugInfo("Error deleting demo: " + typedError.message);
       }
     }
   }
@@ -450,7 +450,7 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
     
     if (!modelExists) {
       const errorMsg = "Cannot submit: Demo model is not available in the backend yet.";
-      setDebugInfo(errorMsg);
+      //setDebugInfo(errorMsg);
       console.error(errorMsg);
       alert(errorMsg);
       return;
@@ -578,7 +578,7 @@ function AdminInterface({ currentUser, onLogout }: AdminInterfaceProps) {
         console.error("Error stack:", error.stack);
       }
       
-      setDebugInfo("Error in form submit: " + typedError.message);
+      //setDebugInfo("Error in form submit: " + typedError.message);
       alert("Error saving demo: " + typedError.message + "\n\nCheck console for more details.");
     }
   }
